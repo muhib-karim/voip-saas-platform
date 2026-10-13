@@ -1,234 +1,167 @@
-# VoIP SaaS Platform (Skype-like)
+<p align="center">
+  <img src="docs/banner.svg" alt="VoIP SaaS Platform" width="100%">
+</p>
 
-A full-stack VoIP SaaS reference implementation with WebRTC softphone, DID number management, wallet system, and cross-platform support.
+<p align="center"><b>Browser softphone, phone numbers &amp; prepaid billing: a full-stack VoIP SaaS reference implementation.</b></p>
 
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| **Authentication** | JWT + refresh tokens, account lockout, session management |
-| **DID Numbers** | Search, purchase, and manage phone numbers from 140+ countries |
-| **WebRTC Softphone** | Make/receive calls from browser with dialpad and call controls |
-| **Wallet System** | Prepaid balance, transaction history, Stripe payments |
-| **Call History** | Complete CDR with duration, cost, and status |
-| **Mobile App** | React Native/Expo for iOS and Android |
-| **E2E Testing** | Playwright tests for critical user flows |
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Backend** | Node.js, Express, TypeScript, PostgreSQL, Redis |
-| **Web Frontend** | React, Vite, TypeScript, Zustand |
-| **Mobile** | React Native, Expo, TypeScript |
-| **VoIP** | Telnyx SDK (WebRTC, DID, Call Control) |
-| **Payments** | Stripe (Checkout, Webhooks) |
-| **Testing** | Playwright (E2E), Vitest (Unit) |
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Node.js 18+
-- Docker & Docker Compose
-- PostgreSQL & Redis (or use Docker)
-
-### Installation
-
-```bash
-# Clone and install
-git clone https://github.com/ai-dev-2024/voip-saas-platform.git
-cd voip-saas-platform
-npm install
-
-# Setup environment
-cp .env.example .env
-# Edit .env with your API keys
-
-# Start infrastructure
-npm run docker:dev
-
-# Run migrations
-npm run db:migrate
-
-# Start development
-npm run dev           # Backend + Frontend
-npm run dev:mobile    # Mobile app (Expo)
-```
-
-### Access Points
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:3000 |
-| Mobile | Expo DevTools |
-
-## 📁 Project Structure
-
-```
-packages/
-├── backend/                 # Node.js + Express API
-│   ├── src/
-│   │   ├── config/          # Database, Redis, app config
-│   │   ├── middleware/      # Auth, validation, rate limiting
-│   │   ├── routes/          # API routes
-│   │   │   ├── auth.routes.js
-│   │   │   ├── numbers.routes.js
-│   │   │   ├── wallet.routes.js
-│   │   │   ├── calls.routes.js
-│   │   │   ├── rates.routes.js
-│   │   │   └── webhooks.routes.js
-│   │   └── services/        # Business logic
-│   │       ├── auth.service.js
-│   │       ├── telnyx.service.js
-│   │       ├── billing.service.js
-│   │       ├── wallet.service.js
-│   │       └── rates.service.js
-│   └── migrations/          # Database migrations
-│
-├── frontend/                # React + Vite + TypeScript
-│   └── src/
-│       ├── components/
-│       │   ├── ui/          # Button, Input, Card, Modal, Toast
-│       │   ├── layout/      # Layout with sidebar
-│       │   └── Softphone.tsx
-│       ├── pages/
-│       │   ├── auth/        # Login, Register
-│       │   ├── Dashboard.tsx
-│       │   ├── Numbers.tsx
-│       │   ├── Wallet.tsx
-│       │   ├── Calls.tsx
-│       │   └── Settings.tsx
-│       ├── store/           # Zustand stores
-│       │   ├── authStore.ts
-│       │   └── callsStore.ts
-│       └── services/        # API client
-│
-├── mobile/                  # React Native + Expo
-│   └── src/
-│       ├── screens/         # All mobile screens
-│       ├── store/           # Auth store with SecureStore
-│       └── services/        # API client
-│
-└── tests/
-    └── e2e/                 # Playwright tests
-```
-
-## 🔐 Environment Variables
-
-```env
-# Database
-DATABASE_URL=postgres://user:pass@localhost:5432/voip
-
-# Authentication
-JWT_SECRET=your-super-secret-jwt-key
-JWT_EXPIRES_IN=15m
-REFRESH_TOKEN_EXPIRES_IN=7d
-
-# Telnyx (VoIP)
-TELNYX_API_KEY=KEY_xxx
-TELNYX_PUBLIC_KEY=KEY_xxx
-TELNYX_SIP_CONNECTION_ID=xxx
-
-# Stripe (Payments)
-STRIPE_SECRET_KEY=sk_xxx
-STRIPE_WEBHOOK_SECRET=whsec_xxx
-
-# Redis
-REDIS_URL=redis://localhost:6379
-
-# URLs
-FRONTEND_URL=http://localhost:5173
-BACKEND_URL=http://localhost:3000
-```
-
-## 📱 API Endpoints
-
-### Authentication
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/auth/register` | Create account |
-| POST | `/api/auth/login` | Login (returns JWT) |
-| POST | `/api/auth/refresh` | Refresh access token |
-| POST | `/api/auth/logout` | Logout (clears tokens) |
-
-### Phone Numbers
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/numbers` | Get user's numbers |
-| GET | `/api/numbers/search` | Search available DIDs |
-| POST | `/api/numbers/purchase` | Purchase a number |
-| DELETE | `/api/numbers/:id` | Release a number |
-
-### Wallet
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/wallet` | Get balance |
-| POST | `/api/wallet/topup` | Create Stripe checkout |
-| GET | `/api/wallet/transactions` | Transaction history |
-
-### Calls
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/calls/history` | Call history |
-| GET | `/api/calls/webrtc-token` | Get WebRTC credentials |
-| POST | `/api/calls/initiate` | Start outbound call |
-
-### Rates
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/rates` | Search calling rates |
-| GET | `/api/rates/:countryCode` | Rates for country |
-| POST | `/api/rates/estimate` | Estimate call cost |
-
-## 🧪 Testing
-
-```bash
-# E2E tests
-npm run test:e2e         # Run all tests
-npm run test:e2e:ui      # Interactive UI mode
-
-# Unit tests
-npm run test             # Run all unit tests
-```
-
-## 🚢 Deployment
-
-### Recommended Services
-
-| Service | Platform | Cost |
-|---------|----------|------|
-| **Frontend** | Vercel | Free tier |
-| **Backend** | Railway / Render | Check current pricing |
-| **Database** | Supabase / Neon | Free tier |
-| **Redis** | Upstash | Free tier |
-| **VoIP** | Telnyx | Pay-per-use |
-| **Payments** | Stripe | Check current pricing |
-
-### Docker Deployment
-
-```bash
-# Build and run
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-## 🔑 External Services Setup
-
-### Telnyx
-1. Create account at [telnyx.com](https://telnyx.com)
-2. Create a SIP Connection for WebRTC
-3. Get API Key and Public Key
-4. Configure webhook URL: `https://your-api/api/webhooks/telnyx`
-
-### Stripe
-1. Create account at [stripe.com](https://stripe.com)
-2. Get Secret Key (starts with `sk_`)
-3. Set up webhook endpoint: `https://your-api/api/webhooks/stripe`
-4. Get Webhook Secret (starts with `whsec_`)
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/muhib-karim/voip-saas-platform" alt="License"></a>
+  <img src="https://img.shields.io/github/languages/top/muhib-karim/voip-saas-platform" alt="Top language">
+  <a href="https://github.com/muhib-karim/voip-saas-platform/actions/workflows/ci.yml"><img src="https://github.com/muhib-karim/voip-saas-platform/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
 
 ---
 
-Built with ❤️ using TypeScript across all platforms.
+## What it is
+
+A **reference implementation** of a Skype-style VoIP SaaS: users sign up, buy virtual phone numbers (DIDs), top up a prepaid wallet with Stripe, and place calls from a web softphone. Telephony goes through the [Telnyx](https://telnyx.com) API.
+
+It's an npm-workspaces monorepo with three apps:
+
+| Package | Stack | What's in it |
+|---|---|---|
+| `packages/backend` | Node.js, Express, Knex, PostgreSQL, Redis | REST API, 6 route modules (30 endpoints plus `/health`), Telnyx and Stripe integrations, 2 Knex migrations (11 tables) |
+| `packages/frontend` | React 18, Vite, TypeScript, Zustand | Dashboard, Numbers, Wallet, Calls, Settings, Login/Register, dialpad softphone |
+| `packages/mobile` | React Native, Expo | 6 screens (login, register, dashboard, dialer, calls, settings) |
+
+> **Status: reference implementation, not a hosted product.** There is no public demo. Running it end-to-end needs your own Telnyx and Stripe accounts plus PostgreSQL and Redis. The automated tests here cover the backend's HTTP layer and business logic offline, without those services. See [Limitations](#limitations).
+
+## Key features (as implemented)
+
+- **Auth:** registration and login with bcrypt-hashed passwords. You get a 15-minute JWT access token and a 7-day refresh token in an HTTP-only cookie. Refresh tokens are rotated and stored hashed (SHA-256), and sessions can be listed and revoked.
+- **Phone numbers:** search available Telnyx numbers by country, area code and type (local / toll-free / mobile), then buy them (charged to the wallet) or release them.
+- **Wallet and payments:** prepaid balance, Stripe Checkout top-ups (minimum $5), transaction history, saved cards. Stripe webhooks are checked against their signature.
+- **Calling:** outbound calls go through Telnyx Call Control after the backend checks that the user owns the caller ID. It can also issue Telnyx WebRTC credentials (`GET /api/calls/token`).
+- **Call detail records:** Telnyx call webhooks update a `cdr` table (initiated, ringing, answered, hangup). Each record gets a duration and a cost, and there are history and stats endpoints.
+- **Rates:** a per-country rate table with Redis caching and a call-cost estimator.
+- **Hardening:** helmet headers, CORS limited to the frontend origin, a 10 kB JSON body limit, a Redis-backed rate limiter (with a stricter limit on login and register), and request validation middleware.
+
+## Demo
+
+There's no hosted demo. This is real output from the backend test suite (abridged and re-rendered as SVG; per-test timings removed):
+
+<p align="center"><img src="docs/test-run.svg" alt="Backend test run: 40 tests passing" width="820"></p>
+
+## Quick start
+
+**Prerequisites:** Node.js 18+ (CI uses 22), PostgreSQL 15 and Redis 7. You can run both with `docker-compose up -d postgres redis`. For calls and payments you also need Telnyx and Stripe credentials.
+
+```bash
+git clone https://github.com/muhib-karim/voip-saas-platform.git
+cd voip-saas-platform
+
+# Install the backend + web frontend (the Expo app is installed separately)
+npm install -w packages/backend -w packages/frontend
+
+cp .env.example .env          # then fill in Telnyx / Stripe keys and a strong JWT_SECRET
+npm run db:migrate            # creates the schema in PostgreSQL
+npm run dev                   # backend on :5000, Vite dev server on :3000 (proxies /api)
+```
+
+Mobile app (optional): `npm install -w packages/mobile && npm run dev:mobile`.
+
+## Usage
+
+```bash
+# Health check
+curl http://localhost:5000/health
+
+# Register, then use the returned accessToken
+curl -X POST http://localhost:5000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"a-long-password","firstName":"Ada","lastName":"Lovelace"}'
+
+# Estimate a 3-minute call to the UK
+curl -X POST http://localhost:5000/api/rates/estimate \
+  -H 'Content-Type: application/json' -d '{"countryCode":"GB","duration":3}'
+```
+
+### API overview
+
+| Area | Endpoints |
+|---|---|
+| Auth `/api/auth` | `POST /register`, `POST /login`, `POST /refresh`, `POST /logout`, `POST /logout-all`, `GET /me`, `PATCH /profile`, `POST /change-password`, `GET /sessions`, `DELETE /sessions/:id` |
+| Numbers `/api/numbers` | `GET /`, `GET /search`, `POST /purchase`, `DELETE /:id` |
+| Wallet `/api/wallet` | `GET /`, `POST /topup`, `GET /transactions`, `GET /payment-methods`, `POST /setup-payment` |
+| Calls `/api/calls` | `GET /token`, `POST /`, `GET /history`, `GET /stats`, `GET /:id` |
+| Rates `/api/rates` | `GET /`, `GET /:countryCode`, `POST /estimate` |
+| Webhooks `/api/webhooks` | `POST /stripe`, `POST /telnyx`, `POST /telnyx/call` |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        W["Web app<br/>React + Vite + Zustand"]
+        M["Mobile app<br/>React Native / Expo"]
+    end
+
+    subgraph API["Backend (Express)"]
+        MW["helmet · CORS · rate limiter<br/>JWT auth · validation"]
+        R["Routes<br/>auth · numbers · wallet · calls · rates · webhooks"]
+        S["Services<br/>auth · telnyx · billing · wallet · cdr · rates"]
+        MW --> R --> S
+    end
+
+    W -->|REST /api| MW
+    M -->|REST /api| MW
+    S --> PG[("PostgreSQL<br/>Knex migrations")]
+    S --> RD[("Redis<br/>rate limits · rate cache")]
+    S -->|numbers · calls · WebRTC creds| TX["Telnyx API"]
+    S -->|Checkout · cards| ST["Stripe API"]
+    TX -->|call webhooks → CDR| R
+    ST -->|signed webhooks → wallet credit| R
+```
+
+`src/app.js` builds the Express app and `src/index.js` connects Redis and starts the server. Keeping them apart lets the tests load the app without opening a port.
+
+## Testing
+
+```bash
+npm install -w packages/backend -w packages/frontend
+
+npm test --workspace=packages/backend            # 40 tests (node:test + supertest), no DB/Redis needed
+npm run lint --workspace=packages/backend        # ESLint
+npm run type-check --workspace=packages/frontend # tsc --noEmit
+npm run build --workspace=packages/frontend      # production Vite build
+```
+
+The backend suite covers both validation middlewares, the JWT auth guard (missing, forged and expired tokens), the rate limiter, CDR duration and cost maths, the call-cost estimator, token generation, Stripe webhook signature rejection, and the 404 and health routes. [CI](.github/workflows/ci.yml) runs exactly these commands on every push and pull request.
+
+`tests/e2e/` holds Playwright specs (`npm run test:e2e`). They need the full stack running and aren't part of CI.
+
+## Project structure
+
+```
+.
+├── packages/
+│   ├── backend/
+│   │   ├── src/
+│   │   │   ├── app.js           # Express app (middleware + routes)
+│   │   │   ├── index.js         # server bootstrap, Redis init, graceful shutdown
+│   │   │   ├── config/          # env config, Knex, Redis cache wrapper
+│   │   │   ├── middleware/      # auth, validation, rate limiting, error handler
+│   │   │   ├── routes/          # auth, numbers, wallet, calls, rates, webhooks
+│   │   │   └── services/        # auth, telnyx, billing (Stripe), wallet, cdr, rates
+│   │   ├── migrations/          # Knex schema migrations
+│   │   └── test/                # node:test unit + HTTP tests
+│   ├── frontend/src/            # React app: pages/, components/, store/, services/
+│   └── mobile/src/              # Expo app: screens/, store/, services/
+├── tests/e2e/                   # Playwright specs
+├── deploy/                      # Kubernetes manifest + deploy script (templates)
+├── docker-compose.yml           # Postgres, Redis, backend, frontend for local dev
+└── .github/workflows/           # ci.yml (lint/test/build), ci-cd.yml (Docker images)
+```
+
+## Limitations
+
+- **The browser doesn't carry call audio.** The web softphone places calls through the backend (Telnyx Call Control) and keeps call state in the browser. `@telnyx/webrtc` is a dependency and the backend issues WebRTC tokens, but no in-browser media session is wired up. Mute, hold and DTMF only change local UI state, and there's no hangup endpoint on the backend yet.
+- **Rate limiting fails open without Redis.** If Redis is down, every request is allowed (covered by a test).
+- **Stripe and Telnyx paths aren't integration-tested.** They need real credentials.
+- **Leftover files in the frontend.** `packages/frontend/src` still has older `.jsx` versions of some components next to the `.tsx` ones. Only the `.tsx` tree (entry `main.tsx`) is built.
+- **The mobile app isn't built or tested in CI.**
+- **`ci-cd.yml` only triggers on `main`/`develop`.** The default branch is `master`, so the Docker image workflow is effectively dormant.
+
+## License
+
+[MIT](LICENSE) © 2026 Muhib Al Karim

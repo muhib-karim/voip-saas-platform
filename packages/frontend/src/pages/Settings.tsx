@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, Bell, Shield, Globe } from 'lucide-react';
+import { User, Bell, Shield } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Input, Button } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 

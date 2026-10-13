@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (lint + tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # No lockfile is committed and the mobile (Expo) workspace is not
+      # needed here, so install only the backend and frontend workspaces.
+      - name: Install dependencies
+        run: npm install -w packages/backend -w packages/frontend --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint --workspace=packages/backend
+
+      - name: Unit + HTTP tests
+        run: npm test --workspace=packages/backend
+
+  frontend:
+    name: Frontend (type-check + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install -w packages/backend -w packages/frontend --no-audit --no-fund
+
+      - name: Type-check
+        run: npm run type-check --workspace=packages/frontend
+
+      - name: Build
+        run: npm run build --workspace=packages/frontend

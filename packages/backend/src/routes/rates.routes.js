@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import ratesService from '../services/rates.service.js';
-import { authenticate, optionalAuth } from '../middleware/auth.js';
+import { optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 

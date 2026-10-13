@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Phone, Search, Globe, Plus, Trash2, MapPin, CheckCircle } from 'lucide-react';
+import { Phone, Search, Trash2, MapPin, CheckCircle } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, Button, Input, Modal, useToast } from '@/components/ui';
 import api from '@/services/api';
 import './Numbers.css';

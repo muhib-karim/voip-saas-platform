@@ -1,5 +1,4 @@
 import { cache } from '../config/redis.js';
-import config from '../config/index.js';
 
 /**
  * Redis-based rate limiter with sliding window
@@ -10,7 +9,6 @@ export function createRateLimiter(options = {}) {
         max = 100,                    // Max requests per window
         keyPrefix = 'rl:',
         message = 'Too many requests, please try again later',
-        skipSuccessfulRequests = false,
         keyGenerator = (req) => req.ip,
         skip = () => false,
         handler = null

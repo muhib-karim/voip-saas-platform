@@ -59,10 +59,9 @@ router.post('/telnyx', async (req, res) => {
         }
 
         const callControlId = payload.call_control_id;
-        const callLegId = payload.call_leg_id;
 
         switch (eventType) {
-            case 'call.initiated':
+            case 'call.initiated': {
                 // Find user from the DID number
                 const fromNumber = payload.from;
                 const toNumber = payload.to;
@@ -77,17 +76,18 @@ router.post('/telnyx', async (req, res) => {
                     userId = did?.user_id;
                 }
 
-                await cdrService.upsertCDR({
-                    callId: callControlId,
-                    telnyxCallControlId: callControlId,
-                    userId,
-                    direction: direction === 'incoming' ? 'inbound' : 'outbound',
-                    fromNumber,
-                    toNumber,
-                    status: 'initiated',
-                    startTime: new Date(payload.start_time || Date.now())
-                });
-                break;
+                    await cdrService.upsertCDR({
+                        callId: callControlId,
+                        telnyxCallControlId: callControlId,
+                        userId,
+                        direction: direction === 'incoming' ? 'inbound' : 'outbound',
+                        fromNumber,
+                        toNumber,
+                        status: 'initiated',
+                        startTime: new Date(payload.start_time || Date.now())
+                    });
+                    break;
+            }
 
             case 'call.ringing':
                 await cdrService.upsertCDR({

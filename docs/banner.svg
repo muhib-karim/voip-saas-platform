@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="VoIP SaaS Platform banner">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="0.55" stop-color="#11203a"/>
+      <stop offset="1" stop-color="#0a2a3a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#34d399"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1280" height="320" fill="url(#bg)"/>
+
+  <!-- subtle grid -->
+  <g stroke="#ffffff" stroke-opacity="0.04" stroke-width="1">
+    <path d="M0 80H1280M0 160H1280M0 240H1280"/>
+    <path d="M160 0V320M320 0V320M480 0V320M640 0V320M800 0V320M960 0V320M1120 0V320"/>
+  </g>
+
+  <!-- motif: handset with signal arcs and a waveform -->
+  <circle cx="1060" cy="160" r="150" fill="url(#glow)"/>
+  <g transform="translate(1000 100)">
+    <path d="M22 8c6-6 15-6 20 0l14 16c5 6 5 14-1 19l-9 8c6 14 17 25 31 31l8-9c5-6 13-6 19-1l16 14c6 5 6 14 0 20l-11 11c-9 9-23 11-35 5C50 109 19 78 6 44 1 32 3 18 12 9z"
+          fill="none" stroke="url(#accent)" stroke-width="7" stroke-linejoin="round"/>
+    <g fill="none" stroke="#34d399" stroke-width="6" stroke-linecap="round">
+      <path d="M92 26a32 32 0 0 1 32 32" stroke-opacity="0.95"/>
+      <path d="M94 4a56 56 0 0 1 52 52" stroke-opacity="0.7"/>
+      <path d="M96 -18a80 80 0 0 1 72 72" stroke-opacity="0.45"/>
+    </g>
+  </g>
+  <path d="M760 250h40l12-22 16 44 18-70 18 84 14-48 12 12h40l12-18 14 30 12-12h120"
+        fill="none" stroke="url(#accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="0.8"/>
+
+  <!-- text -->
+  <text x="80" y="140" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="64" font-weight="700" fill="#f1f5f9">VoIP SaaS Platform</text>
+  <rect x="82" y="162" width="120" height="5" rx="2.5" fill="url(#accent)"/>
+  <text x="80" y="210" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="26" fill="#cbd5e1">Browser softphone, phone numbers &amp; prepaid billing</text>
+  <text x="80" y="252" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="18" fill="#7dd3fc" letter-spacing="1">NODE.JS · EXPRESS · REACT · WEBRTC · POSTGRESQL · TELNYX · STRIPE</text>
+</svg>

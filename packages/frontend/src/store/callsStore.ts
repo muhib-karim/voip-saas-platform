@@ -72,7 +72,7 @@ export const useCallsStore = create<CallsStoreState>((set, get) => ({
     // Initialize WebRTC
     initWebRTC: async () => {
         try {
-            const response = await api.get('/calls/webrtc-token');
+            const response = await api.get('/calls/token');
             set({
                 webrtcToken: response.data.token,
                 sipUsername: response.data.sipUsername,
@@ -117,7 +117,7 @@ export const useCallsStore = create<CallsStoreState>((set, get) => ({
         set({ activeCall: call, error: null });
 
         try {
-            const response = await api.post('/calls/initiate', {
+            const response = await api.post('/calls', {
                 from: selectedFromNumber,
                 to: destination
             });
@@ -165,7 +165,7 @@ export const useCallsStore = create<CallsStoreState>((set, get) => ({
             set((state) => ({
                 recentCalls: [{
                     ...activeCall,
-                    status: 'ended'
+                    status: 'ended' as CallStatus
                 }, ...state.recentCalls].slice(0, 50)
             }));
         }

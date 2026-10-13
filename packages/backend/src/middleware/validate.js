@@ -136,9 +136,10 @@ function checkType(value, type) {
             return Array.isArray(value);
         case 'object':
             return typeof value === 'object' && !Array.isArray(value) && value !== null;
-        case 'uuid':
+        case 'uuid': {
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
             return uuidRegex.test(value);
+        }
         default:
             return true;
     }

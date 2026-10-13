@@ -35,7 +35,6 @@ const Softphone: React.FC = () => {
         error,
         setDialpadNumber,
         appendDialpadDigit,
-        clearDialpad,
         setSelectedFromNumber,
         makeCall,
         hangup,
