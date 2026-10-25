@@ -162,6 +162,16 @@ The backend suite covers both validation middlewares, the JWT auth guard (missin
 - **The mobile app isn't built or tested in CI.**
 - **`ci-cd.yml` only triggers on `main`/`develop`.** The default branch is `master`, so the Docker image workflow is effectively dormant.
 
+## Tech stack
+
+- **Language:** JavaScript
+- **Frameworks and tools:** Playwright, Express, PostgreSQL, Stripe, React, Vite, TypeScript, Vitest, React Native, Docker
+- **CI:** GitHub Actions
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow. Before opening a pull request, run `npm test` and `npm run lint`. Please keep each pull request focused and say how you tested it.
+
 ## License
 
 [MIT](LICENSE) © 2026 Muhib Al Karim
