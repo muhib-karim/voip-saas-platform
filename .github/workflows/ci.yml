@@ -47,5 +47,31 @@ jobs:
       - name: Type-check
         run: npm run type-check --workspace=packages/frontend
 
+      - name: Unit tests
+        run: npm test --workspace=packages/frontend
+
       - name: Build
         run: npm run build --workspace=packages/frontend
+
+  root-scripts:
+    name: Root scripts (npm test / npm run build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install -w packages/backend -w packages/frontend --no-audit --no-fund
+
+      # The root scripts use --workspaces --if-present: a workspace without
+      # the script (mobile has no test or build, backend has no build step)
+      # is skipped and is not counted as a pass. Every workspace that does
+      # define the script must succeed.
+      - name: npm test (all workspaces that define tests)
+        run: npm test
+
+      - name: npm run build (all workspaces that define a build)
+        run: npm run build
