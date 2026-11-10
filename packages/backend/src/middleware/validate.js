@@ -33,6 +33,7 @@ export const validate = (schema) => {
 
 function validateFields(data, rules, location) {
     const errors = [];
+    data = data && typeof data === 'object' ? data : {};
 
     for (const [field, fieldRules] of Object.entries(rules)) {
         const value = data[field];
@@ -101,8 +102,29 @@ function validateFields(data, rules, location) {
             });
         }
 
-        // Pattern
-        if (fieldRules.pattern && !fieldRules.pattern.test(value)) {
+        // Max value (for numbers)
+        if (fieldRules.max !== undefined && value > fieldRules.max) {
+            errors.push({
+                field,
+                location,
+                message: `${field} must be at most ${fieldRules.max}`
+            });
+        }
+
+        // Decimal places (for money)
+        if (fieldRules.maxDecimals !== undefined && typeof value === 'number') {
+            const scaled = value * 10 ** fieldRules.maxDecimals;
+            if (Math.abs(scaled - Math.round(scaled)) > 1e-6) {
+                errors.push({
+                    field,
+                    location,
+                    message: `${field} must have at most ${fieldRules.maxDecimals} decimal places`
+                });
+            }
+        }
+
+        // Pattern (strings only: RegExp.test() would coerce arrays and objects)
+        if (fieldRules.pattern && (typeof value !== 'string' || !fieldRules.pattern.test(value))) {
             errors.push({
                 field,
                 location,
@@ -129,7 +151,9 @@ function checkType(value, type) {
         case 'email':
             return typeof value === 'string';
         case 'number':
-            return typeof value === 'number' && !isNaN(value);
+            return typeof value === 'number' && Number.isFinite(value);
+        case 'isoDate':
+            return typeof value === 'string' && value.length <= 40 && !Number.isNaN(Date.parse(value));
         case 'boolean':
             return typeof value === 'boolean';
         case 'array':
@@ -138,7 +162,7 @@ function checkType(value, type) {
             return typeof value === 'object' && !Array.isArray(value) && value !== null;
         case 'uuid': {
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            return uuidRegex.test(value);
+            return typeof value === 'string' && uuidRegex.test(value);
         }
         default:
             return true;

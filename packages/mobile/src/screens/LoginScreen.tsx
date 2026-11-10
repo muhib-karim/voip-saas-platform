@@ -11,11 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 
 type Props = {
-    navigation: NativeStackNavigationProp<any>;
+    navigation: NativeStackNavigationProp<ParamListBase>;
 };
 
 export default function LoginScreen({ navigation }: Props) {

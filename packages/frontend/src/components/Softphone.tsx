@@ -62,6 +62,8 @@ const Softphone: React.FC = () => {
             }
         };
         loadNumbers();
+        // Runs once on mount by design: it picks the initial caller ID.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Call duration timer

@@ -129,7 +129,7 @@ const Login: React.FC = () => {
 
                         <div className="auth-footer">
                             <span className="auth-footer-text">
-                                Don't have an account?{' '}
+                                Don&apos;t have an account?{' '}
                             </span>
                             <Link to="/register" className="auth-link">
                                 Create account

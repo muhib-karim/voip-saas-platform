@@ -33,7 +33,7 @@ const Settings: React.FC = () => {
                                 <Input label="Last Name" defaultValue={user?.lastName} />
                             </div>
                             <Input label="Email" type="email" defaultValue={user?.email} />
-                            <Input label="Phone Number" type="tel" placeholder="+1 (555) 000-0000" />
+                            <Input label="Phone Number" type="tel" placeholder="+1 (415) 555-0123" />
                             <Button>Save Changes</Button>
                         </div>
                     </CardContent>

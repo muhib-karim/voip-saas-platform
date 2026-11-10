@@ -1,14 +1,15 @@
 {
     "name": "@voip-saas/mobile",
     "version": "1.0.0",
-    "main": "expo/AppEntry.js",
+    "main": "index.js",
     "scripts": {
         "start": "expo start",
         "android": "expo run:android",
         "ios": "expo run:ios",
         "web": "expo start --web",
         "prebuild": "expo prebuild",
-        "lint": "eslint . --ext .ts,.tsx"
+        "lint": "eslint . --ext .ts,.tsx",
+        "type-check": "tsc --noEmit"
     },
     "dependencies": {
         "@expo/vector-icons": "^14.0.0",

@@ -3,8 +3,16 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
+type CallRow = {
+    id: string;
+    direction: 'inbound' | 'outbound';
+    number: string;
+    time: string;
+    duration: string;
+};
+
 export default function CallsScreen() {
-    const calls: any[] = []; // Will be populated from API
+    const calls: CallRow[] = []; // Will be populated from API
 
     return (
         <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -20,7 +28,7 @@ export default function CallsScreen() {
                         <TouchableOpacity key={call.id} style={styles.callRow}>
                             <View style={[styles.callIcon, call.direction === 'inbound' ? styles.inbound : styles.outbound]}>
                                 <Ionicons
-                                    name={call.direction === 'inbound' ? 'call-incoming' : 'call-outgoing'}
+                                    name={call.direction === 'inbound' ? 'arrow-down-outline' : 'arrow-up-outline'}
                                     size={20}
                                     color={call.direction === 'inbound' ? '#0AA30A' : '#6264A7'}
                                 />

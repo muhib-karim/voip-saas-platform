@@ -4,10 +4,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 export default function DashboardScreen() {
     const user = useAuthStore((state) => state.user);
 
-    const stats = [
+    const stats: { icon: IoniconName; label: string; value: string; color: string }[] = [
         { icon: 'call', label: 'Active Numbers', value: '0', color: '#00AFF0' },
         { icon: 'globe', label: 'Countries', value: '140+', color: '#6264A7' },
         { icon: 'time', label: 'Minutes', value: '0', color: '#0AA30A' },
@@ -28,7 +30,7 @@ export default function DashboardScreen() {
                     {stats.map((stat) => (
                         <View key={stat.label} style={styles.statCard}>
                             <View style={[styles.statIcon, { backgroundColor: stat.color + '20' }]}>
-                                <Ionicons name={stat.icon as any} size={24} color={stat.color} />
+                                <Ionicons name={stat.icon} size={24} color={stat.color} />
                             </View>
                             <Text style={styles.statValue}>{stat.value}</Text>
                             <Text style={styles.statLabel}>{stat.label}</Text>

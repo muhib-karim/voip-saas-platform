@@ -1,30 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="960" height="584" viewBox="0 0 960 584" role="img" aria-label="Backend test run output">
-<rect width="960" height="584" rx="10" fill="#0d1117"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="664" viewBox="0 0 960 664" role="img" aria-label="Backend test run output">
+<rect width="960" height="664" rx="10" fill="#0d1117"/>
 <rect width="960" height="30" rx="10" fill="#161b22"/><rect y="20" width="960" height="10" fill="#161b22"/>
 <circle cx="20" cy="15" r="6" fill="#ff5f56"/><circle cx="40" cy="15" r="6" fill="#ffbd2e"/><circle cx="60" cy="15" r="6" fill="#27c93f"/>
 <text x="480.0" y="20" text-anchor="middle" fill="#7d8590" font-family="Consolas, Menlo, monospace" font-size="12">voip-saas-platform — backend tests</text>
 <text x="18" y="56" fill="#e6edf3" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">$ npm test --workspace=packages/backend</text>
-<text x="18" y="76" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">&gt; node --test test/*.test.js</text>
-<text x="18" y="116" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ GET /health reports ok</text>
-<text x="18" y="136" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ unknown routes return a JSON 404</text>
-<text x="18" y="156" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ security headers are set by helmet</text>
-<text x="18" y="176" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ API responses carry rate-limit headers</text>
-<text x="18" y="196" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ GET /api/wallet requires a bearer token</text>
-<text x="18" y="216" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ GET /api/numbers requires a bearer token</text>
-<text x="18" y="236" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ GET /api/calls/history requires a bearer token</text>
-<text x="18" y="256" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ GET /api/auth/me requires a bearer token</text>
-<text x="18" y="276" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
-<text x="18" y="296" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ cdr.calculateDuration returns whole seconds and never goes negative</text>
-<text x="18" y="316" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ cdr.calculateCost bills outbound per started minute and inbound for free</text>
-<text x="18" y="336" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ cdr.formatCDR maps database columns to the API shape</text>
-<text x="18" y="356" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ rates.estimateCallCost adds connection fee and rounds to cents</text>
-<text x="18" y="376" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ auth.generateAccessToken issues a 15-minute access JWT</text>
-<text x="18" y="396" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ auth.generateRefreshToken returns a random token and its sha256 hash</text>
-<text x="18" y="416" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
-<text x="18" y="436" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ register schema reports every invalid field</text>
-<text x="18" y="456" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ purchaseNumber schema requires an E.164 phone number</text>
-<text x="18" y="476" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ topUp schema enforces the $5-$1000 range</text>
-<text x="18" y="516" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ tests 40</text>
-<text x="18" y="536" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ pass 40</text>
-<text x="18" y="556" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ fail 0</text>
+<text x="18" y="76" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">&gt; node --test test/*.test.js test/db/*.test.js</text>
+<text x="18" y="116" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ two concurrent debits cannot both spend the same balance</text>
+<text x="18" y="136" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ an idempotency key is applied once, even under concurrency</text>
+<text x="18" y="156" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
+<text x="18" y="176" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ the same event delivered again does not credit twice</text>
+<text x="18" y="196" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ the credit comes from amount_total, never from metadata</text>
+<text x="18" y="216" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
+<text x="18" y="236" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ an unsigned webhook is rejected</text>
+<text x="18" y="256" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ a correctly signed but old webhook is rejected (replay)</text>
+<text x="18" y="276" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ the /telnyx/call URL given to Telnyx for outbound calls answers</text>
+<text x="18" y="296" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
+<text x="18" y="316" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ a duplicate call.hangup does not bill the call again</text>
+<text x="18" y="336" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ hangup arriving before answered is still billed, once</text>
+<text x="18" y="356" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ a call that was never answered costs nothing</text>
+<text x="18" y="376" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
+<text x="18" y="396" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ one refresh token cannot be redeemed twice concurrently</text>
+<text x="18" y="416" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ replaying a rotated token revokes the whole session family</text>
+<text x="18" y="436" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
+<text x="18" y="456" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ GET /api/calls/:id does not return another user's call</text>
+<text x="18" y="476" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ tokens signed with another HMAC algorithm are rejected</text>
+<text x="18" y="496" fill="#7d8590" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">  … (abridged)</text>
+<text x="18" y="516" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ production refuses to start without JWT_SECRET (no built-in fallback)</text>
+<text x="18" y="536" fill="#3fb950" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">✔ without Redis the limit is still enforced, from process memory</text>
+<text x="18" y="576" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ tests 200</text>
+<text x="18" y="596" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ pass 200</text>
+<text x="18" y="616" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ fail 0</text>
+<text x="18" y="636" fill="#58a6ff" font-family="Consolas, Menlo, 'DejaVu Sans Mono', monospace" font-size="13" xml:space="preserve">ℹ skipped 0</text>
 </svg>

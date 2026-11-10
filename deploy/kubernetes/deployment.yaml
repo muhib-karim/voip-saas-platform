@@ -37,11 +37,42 @@ spec:
                 secretKeyRef:
                   name: voip-secrets
                   key: telnyx-api-key
+            # Ed25519 public key from the Telnyx portal. Without it every
+            # Telnyx webhook is rejected, and the backend will not start.
+            - name: TELNYX_PUBLIC_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: voip-secrets
+                  key: telnyx-public-key
+            - name: TELNYX_SIP_CONNECTION_ID
+              valueFrom:
+                secretKeyRef:
+                  name: voip-secrets
+                  key: telnyx-sip-connection-id
             - name: STRIPE_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: voip-secrets
                   key: stripe-secret-key
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: voip-secrets
+                  key: stripe-webhook-secret
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: voip-secrets
+                  key: redis-url
+            # Public https URLs: CORS origin / Stripe return URL, and the base
+            # of the webhook URL handed to Telnyx.
+            - name: FRONTEND_URL
+              value: "https://your-domain.com"
+            - name: BACKEND_URL
+              value: "https://api.your-domain.com"
+            # One proxy (the ingress controller) sits in front of the pod.
+            - name: TRUST_PROXY
+              value: "1"
           resources:
             requests:
               memory: "256Mi"

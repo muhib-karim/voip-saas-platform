@@ -3,8 +3,31 @@ import authService from '../services/auth.service.js';
 import { validate, schemas, trimStrings } from '../middleware/validation.js';
 import { authenticate } from '../middleware/auth.js';
 import { rateLimiters } from '../middleware/rateLimiter.js';
+import config from '../config/index.js';
+import { isRefreshToken } from '../utils/validators.js';
 
 const router = Router();
+
+const REFRESH_COOKIE = 'refreshToken';
+
+// Attributes must match between set and clear, or the browser keeps the cookie.
+const refreshCookieBase = () => ({
+    httpOnly: true,
+    secure: config.isProduction,
+    sameSite: 'strict'
+});
+
+const setRefreshCookie = (res, token) =>
+    res.cookie(REFRESH_COOKIE, token, { ...refreshCookieBase(), maxAge: config.refreshTokenTtlMs });
+
+const clearRefreshCookie = (res) => res.clearCookie(REFRESH_COOKIE, refreshCookieBase());
+
+// Cookie first (browsers), body second (clients without a cookie jar).
+// Anything that is not a well-formed token is treated as absent.
+const readRefreshToken = (req) => {
+    const candidate = req.cookies?.[REFRESH_COOKIE] || req.body?.refreshToken;
+    return isRefreshToken(candidate) ? candidate : null;
+};
 
 // Apply string trimming to all routes
 router.use(trimStrings);
@@ -21,12 +44,7 @@ router.post('/register',
             const result = await authService.register(req.body);
 
             // Set refresh token as HTTP-only cookie
-            res.cookie('refreshToken', result.refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
+            setRefreshCookie(res, result.refreshToken);
 
             res.status(201).json({
                 user: result.user,
@@ -57,12 +75,7 @@ router.post('/login',
             });
 
             // Set refresh token as HTTP-only cookie
-            res.cookie('refreshToken', result.refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-            });
+            setRefreshCookie(res, result.refreshToken);
 
             res.json({
                 user: result.user,
@@ -78,10 +91,9 @@ router.post('/login',
  * POST /api/auth/refresh
  * Refresh access token using refresh token
  */
-router.post('/refresh', async (req, res, next) => {
+router.post('/refresh', rateLimiters.refresh, async (req, res, next) => {
     try {
-        // Get refresh token from cookie or body
-        const refreshToken = req.cookies?.refreshToken || req.body.refreshToken;
+        const refreshToken = readRefreshToken(req);
 
         if (!refreshToken) {
             return res.status(401).json({ error: 'Refresh token required' });
@@ -93,19 +105,17 @@ router.post('/refresh', async (req, res, next) => {
         const result = await authService.refreshTokens(refreshToken, deviceInfo, ipAddress);
 
         // Update refresh token cookie
-        res.cookie('refreshToken', result.refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'strict',
-            maxAge: 7 * 24 * 60 * 60 * 1000
-        });
+        setRefreshCookie(res, result.refreshToken);
 
         res.json({
             accessToken: result.accessToken
         });
     } catch (error) {
-        // Clear cookie on refresh failure
-        res.clearCookie('refreshToken');
+        // 409 means another request rotated this token a moment ago and has
+        // just set the new cookie; clearing it here would log that client out.
+        if (error.status !== 409) {
+            clearRefreshCookie(res);
+        }
         next(error);
     }
 });
@@ -116,10 +126,9 @@ router.post('/refresh', async (req, res, next) => {
  */
 router.post('/logout', async (req, res, next) => {
     try {
-        const refreshToken = req.cookies?.refreshToken || req.body.refreshToken;
-        await authService.logout(refreshToken);
+        await authService.logout(readRefreshToken(req));
 
-        res.clearCookie('refreshToken');
+        clearRefreshCookie(res);
         res.json({ message: 'Logged out successfully' });
     } catch (error) {
         next(error);
@@ -133,7 +142,7 @@ router.post('/logout', async (req, res, next) => {
 router.post('/logout-all', authenticate, async (req, res, next) => {
     try {
         await authService.logoutAll(req.user.userId);
-        res.clearCookie('refreshToken');
+        clearRefreshCookie(res);
         res.json({ message: 'Logged out from all devices' });
     } catch (error) {
         next(error);
@@ -183,6 +192,7 @@ router.patch('/profile',
  */
 router.post('/change-password',
     authenticate,
+    rateLimiters.auth,
     validate(schemas.changePassword),
     async (req, res, next) => {
         try {
@@ -193,7 +203,7 @@ router.post('/change-password',
             });
 
             // Clear cookies after password change (forces re-login)
-            res.clearCookie('refreshToken');
+            clearRefreshCookie(res);
             res.json(result);
         } catch (error) {
             next(error);
@@ -218,7 +228,7 @@ router.get('/sessions', authenticate, async (req, res, next) => {
  * DELETE /api/auth/sessions/:id
  * Revoke a specific session
  */
-router.delete('/sessions/:id', authenticate, async (req, res, next) => {
+router.delete('/sessions/:id', authenticate, validate(schemas.uuidParam), async (req, res, next) => {
     try {
         await authService.revokeSession(req.user.userId, req.params.id);
         res.json({ message: 'Session revoked' });

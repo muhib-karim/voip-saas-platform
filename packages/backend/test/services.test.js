@@ -29,7 +29,7 @@ test('cdr.formatCDR maps database columns to the API shape', () => {
         call_id: 'call-1',
         direction: 'outbound',
         from_number: '+14155550100',
-        to_number: '+442071838750',
+        to_number: '+442079460123',
         status: 'completed',
         start_time: 's',
         answer_time: 'a',
@@ -40,7 +40,7 @@ test('cdr.formatCDR maps database columns to the API shape', () => {
         recording_url: null
     });
     assert.equal(formatted.callId, 'call-1');
-    assert.equal(formatted.toNumber, '+442071838750');
+    assert.equal(formatted.toNumber, '+442079460123');
     assert.equal(formatted.cost, 0.01);
     assert.equal(cdrService.formatCDR({ cost: null }).cost, 0);
 });
@@ -58,11 +58,14 @@ test('rates.estimateCallCost adds connection fee and rounds to cents', async (t)
 
 test('auth.generateAccessToken issues a 15-minute access JWT', () => {
     const token = authService.generateAccessToken({ id: 'user-1', email: 'u@example.com' });
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     assert.equal(decoded.userId, 'user-1');
     assert.equal(decoded.email, 'u@example.com');
     assert.equal(decoded.type, 'access');
     assert.equal(decoded.exp - decoded.iat, 15 * 60);
+    assert.equal(decoded.iss, 'voip-saas-api');
+    assert.equal(decoded.aud, 'voip-saas-clients');
+    assert.equal(jwt.decode(token, { complete: true }).header.alg, 'HS256');
 });
 
 test('auth.generateRefreshToken returns a random token and its sha256 hash', async () => {

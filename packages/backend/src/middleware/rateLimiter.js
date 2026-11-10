@@ -1,7 +1,46 @@
+import config from '../config/index.js';
 import { cache } from '../config/redis.js';
 
 /**
- * Redis-based rate limiter with sliding window
+ * In-process fallback counters, used whenever Redis is unavailable so that a
+ * Redis outage degrades rate limiting to per-process instead of turning it off.
+ */
+const memoryStore = new Map();
+const MEMORY_STORE_MAX_KEYS = 50000;
+
+function pruneMemoryStore(now) {
+    for (const [key, entry] of memoryStore) {
+        if (entry.resetAt <= now) memoryStore.delete(key);
+    }
+    // Still full of live windows: drop the oldest entries rather than grow.
+    if (memoryStore.size >= MEMORY_STORE_MAX_KEYS) {
+        let excess = memoryStore.size - MEMORY_STORE_MAX_KEYS + 1;
+        for (const key of memoryStore.keys()) {
+            if (excess-- <= 0) break;
+            memoryStore.delete(key);
+        }
+    }
+}
+
+function memoryHit(key, windowMs, now = Date.now()) {
+    let entry = memoryStore.get(key);
+    if (!entry || entry.resetAt <= now) {
+        if (memoryStore.size >= MEMORY_STORE_MAX_KEYS) pruneMemoryStore(now);
+        entry = { count: 0, resetAt: now + windowMs };
+        memoryStore.set(key, entry);
+    }
+    entry.count += 1;
+    return { count: entry.count, resetAt: entry.resetAt };
+}
+
+/** Clear the in-process counters (tests). */
+export function resetRateLimitMemory() {
+    memoryStore.clear();
+}
+
+/**
+ * Fixed-window rate limiter. Counts in Redis when it is reachable and in
+ * process memory when it is not; it never fails open.
  */
 export function createRateLimiter(options = {}) {
     const {
@@ -23,19 +62,24 @@ export function createRateLimiter(options = {}) {
         }
 
         const key = `${keyPrefix}${keyGenerator(req)}`;
+        const now = Date.now();
 
-        // Try Redis-based rate limiting
-        const count = await cache.incr(key, windowSeconds);
+        const redisHit = await cache.hit(key, windowSeconds);
+        const { count, resetAt } = redisHit
+            ? { count: redisHit.count, resetAt: now + redisHit.ttlSeconds * 1000 }
+            : memoryHit(key, windowMs, now);
+
+        const retryAfter = Math.max(1, Math.ceil((resetAt - now) / 1000));
 
         // Set rate limit headers
         res.set({
             'X-RateLimit-Limit': max,
             'X-RateLimit-Remaining': Math.max(0, max - count),
-            'X-RateLimit-Reset': new Date(Date.now() + windowMs).toISOString()
+            'X-RateLimit-Reset': new Date(resetAt).toISOString()
         });
 
         if (count > max) {
-            res.set('Retry-After', windowSeconds);
+            res.set('Retry-After', retryAfter);
 
             if (handler) {
                 return handler(req, res, next);
@@ -43,7 +87,7 @@ export function createRateLimiter(options = {}) {
 
             return res.status(429).json({
                 error: message,
-                retryAfter: windowSeconds
+                retryAfter
             });
         }
 
@@ -55,7 +99,7 @@ export function createRateLimiter(options = {}) {
  * Pre-configured rate limiters for different endpoints
  */
 export const rateLimiters = {
-    // Strict limiter for auth endpoints (prevent brute force)
+    // Strict limiter for credential endpoints (prevent brute force)
     auth: createRateLimiter({
         windowMs: 15 * 60 * 1000, // 15 minutes
         max: 10,                   // 10 attempts
@@ -63,14 +107,23 @@ export const rateLimiters = {
         message: 'Too many login attempts. Please try again in 15 minutes.'
     }),
 
+    // Token refresh: frequent for legitimate clients (every tab, every 15
+    // minutes), so looser than login but still bounded.
+    refresh: createRateLimiter({
+        windowMs: 15 * 60 * 1000,
+        max: 60,
+        keyPrefix: 'rl:refresh:',
+        message: 'Too many token refresh attempts. Please try again later.'
+    }),
+
     // Standard API limiter
     api: createRateLimiter({
-        windowMs: 15 * 60 * 1000,
-        max: 100,
+        windowMs: config.rateLimitWindowMs,
+        max: config.rateLimitMax,
         keyPrefix: 'rl:api:'
     }),
 
-    // Limiter for expensive operations (search, file uploads)
+    // Limiter for expensive operations (number search, placing calls)
     expensive: createRateLimiter({
         windowMs: 60 * 1000,       // 1 minute
         max: 10,

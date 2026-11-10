@@ -34,6 +34,8 @@ const Wallet: React.FC = () => {
 
     useEffect(() => {
         loadWalletData();
+        // Runs once on mount by design; the loader is not a stable reference.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadWalletData = async () => {
@@ -98,6 +100,8 @@ const Wallet: React.FC = () => {
             error('Payment canceled', 'No charges were made');
             window.history.replaceState({}, '', '/wallet');
         }
+        // Runs once on mount by design: it reads the Stripe redirect parameters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     if (isLoading) {
@@ -259,7 +263,7 @@ const Wallet: React.FC = () => {
                     </div>
 
                     <div className="topup-total">
-                        <span>You'll pay</span>
+                        <span>You&apos;ll pay</span>
                         <span className="topup-total-amount">
                             ${(customAmount ? parseFloat(customAmount) || 0 : topupAmount).toFixed(2)}
                         </span>

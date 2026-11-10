@@ -9,40 +9,71 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
-    name: Backend (lint + tests)
+    name: Backend (lint + tests on Postgres)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: voip_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # The wallet, webhook, billing and token tests need a real database.
+      # REQUIRE_DB_TESTS turns "no database" into a failure instead of a skip.
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/voip_test
+      REQUIRE_DB_TESTS: '1'
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
-      # No lockfile is committed and the mobile (Expo) workspace is not
-      # needed here, so install only the backend and frontend workspaces.
+      # The Expo workspace is not needed here, so only install what is used.
       - name: Install dependencies
-        run: npm install -w packages/backend -w packages/frontend --no-audit --no-fund
+        run: npm ci -w packages/backend --no-audit --no-fund
 
       - name: Lint
         run: npm run lint --workspace=packages/backend
 
-      - name: Unit + HTTP tests
+      - name: Unit, HTTP and database tests
         run: npm test --workspace=packages/backend
 
   frontend:
-    name: Frontend (type-check + build)
+    name: Frontend (lint + type-check + tests + build)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install -w packages/backend -w packages/frontend --no-audit --no-fund
+        run: npm ci -w packages/frontend --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint --workspace=packages/frontend
 
       - name: Type-check
         run: npm run type-check --workspace=packages/frontend
@@ -53,23 +84,54 @@ jobs:
       - name: Build
         run: npm run build --workspace=packages/frontend
 
-  root-scripts:
-    name: Root scripts (npm test / npm run build)
+      # The bundle must be the TypeScript app: it is the only code that calls
+      # /auth/refresh. A stray .jsx/.js copy of the app would silently win
+      # Vite's module resolution again.
+      - name: Check the built bundle is the TypeScript app
+        run: grep -q "/auth/refresh" packages/frontend/dist/assets/*.js
+
+  mobile:
+    name: Mobile (lint + type-check)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
-        run: npm install -w packages/backend -w packages/frontend --no-audit --no-fund
+        run: npm ci -w packages/mobile --no-audit --no-fund
 
-      # The root scripts use --workspaces --if-present: a workspace without
-      # the script (mobile has no test or build, backend has no build step)
-      # is skipped and is not counted as a pass. Every workspace that does
-      # define the script must succeed.
+      - name: Lint
+        run: npm run lint --workspace=packages/mobile
+
+      - name: Type-check
+        run: npm run type-check --workspace=packages/mobile
+
+  root-scripts:
+    name: Root scripts (npm run lint / test / build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies (all workspaces)
+        run: npm ci --no-audit --no-fund
+
+      # What a contributor runs before opening a pull request. The backend's
+      # database tests skip here (no TEST_DATABASE_URL); the backend job above
+      # is the one that runs them.
+      - name: npm run lint (every workspace)
+        run: npm run lint
+
       - name: npm test (all workspaces that define tests)
         run: npm test
 

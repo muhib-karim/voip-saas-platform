@@ -22,7 +22,7 @@ const Dashboard: React.FC = () => {
                         Welcome back, {user?.firstName || 'User'}!
                     </h1>
                     <p className="dashboard-subtitle">
-                        Here's an overview of your account
+                        Here&apos;s an overview of your account
                     </p>
                 </div>
             </header>
