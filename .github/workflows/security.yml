@@ -43,7 +43,6 @@ jobs:
     # Not a gate. Every high/critical finding in the Expo 50 tree needs an Expo,
     # React Native or React Navigation major upgrade (see README, "Known
     # advisories"). The job stays so the list is visible on every run.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -51,8 +50,12 @@ jobs:
         with:
           node-version: 22
 
+      # Report only: the findings are printed and flagged as a warning, but the
+      # job passes so it never blocks a merge.
       - name: Mobile
-        run: npm audit --audit-level=high --workspace=packages/mobile
+        run: |
+          npm audit --audit-level=high --workspace=packages/mobile \
+            || echo "::warning title=Mobile advisories::Known Expo 50 advisories remain (see README, Known advisories)"
 
   gitleaks:
     name: Secret scan (gitleaks)
@@ -70,5 +73,8 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The report is printed in the log; uploading it as an artifact is not
+          # needed and fails whenever the account's artifact storage is full.
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
           # Only needed if the repository moves to an organisation account.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
