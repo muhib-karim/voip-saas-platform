@@ -142,17 +142,34 @@ export const cache = {
      * Increment counter
      */
     async incr(key, ttlSeconds = 3600) {
-        if (!redisClient?.isReady) return 0;
+        const hit = await this.hit(key, ttlSeconds);
+        return hit ? hit.count : 0;
+    },
+
+    /**
+     * Count one hit in a fixed window and report the window's remaining TTL.
+     *
+     * INCR and TTL run in one MULTI. If the key has no expiry (first hit, or a
+     * previous process died between INCR and EXPIRE) it is given one, so a
+     * counter can never be left without a TTL and block a client forever.
+     *
+     * @returns {{count: number, ttlSeconds: number} | null} null when Redis is
+     *          not available; the caller must fall back, not skip the limit.
+     */
+    async hit(key, ttlSeconds = 3600) {
+        if (!redisClient?.isReady) return null;
 
         try {
-            const value = await redisClient.incr(key);
-            if (value === 1) {
+            const [count, ttl] = await redisClient.multi().incr(key).ttl(key).exec();
+            let remaining = Number(ttl);
+            if (remaining < 0) {
                 await redisClient.expire(key, ttlSeconds);
+                remaining = ttlSeconds;
             }
-            return value;
+            return { count: Number(count), ttlSeconds: remaining };
         } catch (err) {
-            logger.error('Redis incr error:', err);
-            return 0;
+            logger.error('Redis rate-limit error:', err);
+            return null;
         }
     }
 };

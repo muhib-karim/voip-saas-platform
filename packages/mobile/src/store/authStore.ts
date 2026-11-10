@@ -26,7 +26,7 @@ interface AuthStore extends AuthState {
 const TOKEN_KEY = 'voip_access_token';
 const USER_KEY = 'voip_user';
 
-export const useAuthStore = create<AuthStore>((set, get) => ({
+export const useAuthStore = create<AuthStore>((set) => ({
     user: null,
     accessToken: null,
     isAuthenticated: false,

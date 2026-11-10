@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 
+type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+
 export default function SettingsScreen() {
     const { user, logout } = useAuthStore();
 
@@ -14,7 +16,7 @@ export default function SettingsScreen() {
         ]);
     };
 
-    const settingsItems = [
+    const settingsItems: { icon: IoniconName; label: string; onPress: () => void }[] = [
         { icon: 'person-outline', label: 'Profile', onPress: () => { } },
         { icon: 'notifications-outline', label: 'Notifications', onPress: () => { } },
         { icon: 'shield-outline', label: 'Security', onPress: () => { } },
@@ -44,7 +46,7 @@ export default function SettingsScreen() {
                 <View style={styles.section}>
                     {settingsItems.map((item) => (
                         <TouchableOpacity key={item.label} style={styles.settingsRow} onPress={item.onPress}>
-                            <Ionicons name={item.icon as any} size={22} color="#8B949E" />
+                            <Ionicons name={item.icon} size={22} color="#8B949E" />
                             <Text style={styles.settingsLabel}>{item.label}</Text>
                             <Ionicons name="chevron-forward" size={20} color="#30363D" />
                         </TouchableOpacity>

@@ -81,3 +81,35 @@ test('ignores optional fields that are absent', () => {
     const schema = { query: { areaCode: { type: 'string' }, limit: { type: 'string' } } };
     assert.equal(run(schema, { query: {} }).nextCalled, true);
 });
+
+test('enforces a maximum and a number of decimal places', () => {
+    const schema = { body: { amount: { type: 'number', required: true, min: 5, max: 1000, maxDecimals: 2 } } };
+    assert.equal(run(schema, { body: { amount: 1000 } }).nextCalled, true);
+    assert.equal(run(schema, { body: { amount: 19.99 } }).nextCalled, true);
+    assert.equal(run(schema, { body: { amount: 1000.01 } }).statusCode, 400);
+    assert.equal(run(schema, { body: { amount: 5.555 } }).statusCode, 400);
+    assert.equal(run(schema, { body: { amount: Infinity } }).statusCode, 400);
+});
+
+test('a pattern never matches a non-string, even one that stringifies to a match', () => {
+    const schema = { body: { to: { type: 'string', required: true, pattern: /^\+[1-9]\d{6,14}$/ } } };
+    assert.equal(run(schema, { body: { to: '+14155550123' } }).nextCalled, true);
+    assert.equal(run(schema, { body: { to: ['+14155550123'] } }).statusCode, 400);
+    assert.equal(run(schema, { body: { to: { toString: () => '+14155550123' } } }).statusCode, 400);
+    assert.equal(run(schema, { body: { to: 14155550123 } }).statusCode, 400);
+});
+
+test('validates ISO dates and rejects non-string uuids', () => {
+    const dates = { query: { startDate: { type: 'isoDate' } } };
+    assert.equal(run(dates, { query: { startDate: '2026-01-31T10:00:00Z' } }).nextCalled, true);
+    assert.equal(run(dates, { query: { startDate: 'last tuesday' } }).statusCode, 400);
+    assert.equal(run(dates, { query: { startDate: ['2026-01-31'] } }).statusCode, 400);
+
+    const ids = { params: { id: { type: 'uuid', required: true } } };
+    assert.equal(run(ids, { params: { id: ['3f2b8c1e-5d4a-4e6f-8a9b-0c1d2e3f4a5b'] } }).statusCode, 400);
+});
+
+test('a missing body or query object is treated as empty', () => {
+    const schema = { body: { phoneNumber: { type: 'string', required: true } } };
+    assert.equal(run(schema, { body: undefined }).statusCode, 400);
+});

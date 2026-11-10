@@ -20,12 +20,13 @@ export default defineConfig({
     },
     build: {
         outDir: 'dist',
-        sourcemap: true,
+        // Source maps are not published with the production bundle. Set
+        // VITE_SOURCEMAP=true for a local build that needs them.
+        sourcemap: process.env.VITE_SOURCEMAP === 'true',
         rollupOptions: {
             output: {
                 manualChunks: {
                     vendor: ['react', 'react-dom', 'react-router-dom'],
-                    telnyx: ['@telnyx/react-client'],
                 },
             },
         },

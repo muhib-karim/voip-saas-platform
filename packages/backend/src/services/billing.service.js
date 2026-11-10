@@ -2,8 +2,14 @@ import Stripe from 'stripe';
 import db from '../config/database.js';
 import config from '../config/index.js';
 import walletService from './wallet.service.js';
+import { httpError } from '../utils/errors.js';
+import { isUuid, toMoney } from '../utils/validators.js';
+import { logger } from '../middleware/errorHandler.js';
 
 const stripe = new Stripe(config.stripeSecretKey);
+
+export const MIN_TOPUP = 5;
+export const MAX_TOPUP = 1000;
 
 class BillingService {
     /**
@@ -22,9 +28,7 @@ class BillingService {
         // Get user details
         const user = await db('users').where({ id: userId }).first();
         if (!user) {
-            const error = new Error('User not found');
-            error.status = 404;
-            throw error;
+            throw httpError(404, 'User not found');
         }
 
         // Create Stripe customer
@@ -49,10 +53,9 @@ class BillingService {
      * Create checkout session for wallet top-up
      */
     async createTopupCheckout(userId, { amount }) {
-        if (amount < 5) {
-            const error = new Error('Minimum top-up amount is $5');
-            error.status = 400;
-            throw error;
+        const fixed = toMoney(amount);
+        if (!fixed || amount < MIN_TOPUP || amount > MAX_TOPUP) {
+            throw httpError(400, `Top-up amount must be between $${MIN_TOPUP} and $${MAX_TOPUP}`);
         }
 
         const customerId = await this.getOrCreateStripeCustomer(userId);
@@ -67,7 +70,7 @@ class BillingService {
                         currency: 'usd',
                         product_data: {
                             name: 'Wallet Top-up',
-                            description: `Add $${amount.toFixed(2)} to your VoIP wallet`
+                            description: `Add $${fixed} to your VoIP wallet`
                         },
                         unit_amount: Math.round(amount * 100) // Stripe uses cents
                     },
@@ -77,7 +80,7 @@ class BillingService {
             metadata: {
                 userId,
                 type: 'topup',
-                amount: amount.toString()
+                amount: fixed
             },
             success_url: `${config.frontendUrl}/wallet?success=true&session_id={CHECKOUT_SESSION_ID}`,
             cancel_url: `${config.frontendUrl}/wallet?canceled=true`
@@ -90,18 +93,49 @@ class BillingService {
     }
 
     /**
-     * Handle successful payment webhook
+     * Credit the wallet for a completed Checkout session.
+     *
+     * Safe to call any number of times for the same payment: the credit is
+     * keyed on the payment, so Stripe's retries and duplicate deliveries are
+     * no-ops. The amount comes from what Stripe actually collected
+     * (amount_total), never from metadata, and only once the session is paid.
+     *
+     * @returns {{ credited: boolean, reason?: string }}
      */
     async handlePaymentSuccess(session) {
-        const { userId, type, amount } = session.metadata;
+        const metadata = session?.metadata || {};
 
-        if (type === 'topup') {
-            // Add funds to wallet
-            await walletService.addFunds(userId, parseFloat(amount), {
-                stripePaymentId: session.payment_intent,
-                description: `Stripe payment - $${amount}`
-            });
+        if (metadata.type !== 'topup') {
+            return { credited: false, reason: 'not_a_topup' };
         }
+        if (session.mode !== 'payment' || session.payment_status !== 'paid') {
+            return { credited: false, reason: 'not_paid' };
+        }
+        if (String(session.currency || '').toLowerCase() !== 'usd') {
+            return { credited: false, reason: 'unsupported_currency' };
+        }
+        if (!isUuid(metadata.userId)) {
+            return { credited: false, reason: 'invalid_user' };
+        }
+        if (!Number.isInteger(session.amount_total) || session.amount_total <= 0) {
+            return { credited: false, reason: 'invalid_amount' };
+        }
+
+        const amount = session.amount_total / 100;
+        const paymentIntent = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+
+        const result = await walletService.addFunds(metadata.userId, amount, {
+            stripePaymentId: paymentIntent,
+            description: `Stripe payment - $${amount.toFixed(2)}`,
+            referenceType: 'topup',
+            idempotencyKey: `stripe:${paymentIntent || session.id}`
+        });
+
+        if (result.duplicate) {
+            logger.info('Stripe payment already credited', { session: session.id });
+            return { credited: false, reason: 'duplicate' };
+        }
+        return { credited: true };
     }
 
     /**
@@ -125,7 +159,7 @@ class BillingService {
     }
 
     /**
-     * Verify Stripe webhook signature
+     * Verify Stripe webhook signature (needs the raw request body)
      */
     constructWebhookEvent(payload, signature) {
         return stripe.webhooks.constructEvent(

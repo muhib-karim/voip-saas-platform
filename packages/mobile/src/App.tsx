@@ -1,11 +1,11 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
+import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useColorScheme, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Screens
@@ -83,7 +83,6 @@ function TabNavigator() {
 
 export default function App() {
     const { isAuthenticated, isLoading, checkAuth } = useAuthStore();
-    const colorScheme = useColorScheme();
 
     useEffect(() => {
         checkAuth();

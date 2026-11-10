@@ -1,7 +1,10 @@
 import axios from 'axios';
-import Constants from 'expo-constants';
 
-const API_URL = Constants.expoConfig?.extra?.apiUrl || 'http://localhost:5000/api';
+// Set EXPO_PUBLIC_API_URL to your own backend, including the /api path, for
+// example https://api.example.com/api. Expo inlines EXPO_PUBLIC_* at build
+// time. There is deliberately no hosted default: credentials are only ever
+// sent to a server you chose.
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
 const api = axios.create({
     baseURL: API_URL,

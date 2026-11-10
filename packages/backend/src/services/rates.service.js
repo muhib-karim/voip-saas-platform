@@ -1,5 +1,8 @@
 import db from '../config/database.js';
 import { cache } from '../config/redis.js';
+import { escapeLike } from '../utils/validators.js';
+
+export const NUMBER_TYPES = ['landline', 'mobile'];
 
 class RatesService {
     /**
@@ -69,22 +72,25 @@ class RatesService {
     /**
      * Search rates by country name
      */
-    async searchRates(query, { page = 1, limit = 50 }) {
-        let dbQuery = db('calling_rates')
-            .where('active', true)
-            .orderBy('country_name', 'asc');
+    async searchRates(query, { page = 1, limit = 50 } = {}) {
+        let dbQuery = db('calling_rates').where('active', true);
 
         if (query) {
+            // % and _ in user input are literal characters, not wildcards.
+            const pattern = `%${escapeLike(query)}%`;
             dbQuery = dbQuery.where(function () {
-                this.whereILike('country_name', `%${query}%`)
-                    .orWhereILike('country_code', `%${query}%`);
+                this.whereILike('country_name', pattern)
+                    .orWhereILike('country_code', pattern);
             });
         }
 
+        // Count without ORDER BY (Postgres rejects it on an ungrouped aggregate).
         const [{ count }] = await dbQuery.clone().count();
 
         const rates = await dbQuery
             .select('*')
+            .orderBy('country_name', 'asc')
+            .orderBy('number_type', 'asc')
             .limit(limit)
             .offset((page - 1) * limit);
 

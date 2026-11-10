@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { User, AuthState, LoginCredentials, RegisterData } from '@/types';
-import api from '@/services/api';
+import api, { refreshAccessToken, setAccessToken, setAuthFailureHandler } from '@/services/api';
 
 interface AuthStore extends AuthState {
     // Actions
@@ -11,8 +11,10 @@ interface AuthStore extends AuthState {
     refreshToken: () => Promise<boolean>;
     updateUser: (user: Partial<User>) => void;
     setLoading: (loading: boolean) => void;
-    checkAuth: () => void;
+    checkAuth: () => Promise<void>;
 }
+
+const signedOut = { user: null, accessToken: null, isAuthenticated: false, isLoading: false };
 
 export const useAuthStore = create<AuthStore>()(
     persist(
@@ -33,15 +35,14 @@ export const useAuthStore = create<AuthStore>()(
                     );
                     const { user, accessToken } = response.data;
 
+                    // Set token for future requests
+                    setAccessToken(accessToken);
                     set({
                         user,
                         accessToken,
                         isAuthenticated: true,
                         isLoading: false,
                     });
-
-                    // Set token for future requests
-                    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                 } catch (error) {
                     set({ isLoading: false });
                     throw error;
@@ -58,14 +59,13 @@ export const useAuthStore = create<AuthStore>()(
                     );
                     const { user, accessToken } = response.data;
 
+                    setAccessToken(accessToken);
                     set({
                         user,
                         accessToken,
                         isAuthenticated: true,
                         isLoading: false,
                     });
-
-                    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
                 } catch (error) {
                     set({ isLoading: false });
                     throw error;
@@ -80,29 +80,20 @@ export const useAuthStore = create<AuthStore>()(
                     // Continue with logout even if API fails
                 }
 
-                set({
-                    user: null,
-                    accessToken: null,
-                    isAuthenticated: false,
-                    isLoading: false,
-                });
-
-                delete api.defaults.headers.common['Authorization'];
+                setAccessToken(null);
+                set(signedOut);
             },
 
             // Refresh token
             refreshToken: async () => {
                 try {
-                    const response = await api.post<{ accessToken: string }>('/auth/refresh');
-                    const { accessToken } = response.data;
-
-                    set({ accessToken });
-                    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-
+                    const accessToken = await refreshAccessToken();
+                    set({ accessToken, isAuthenticated: true });
                     return true;
                 } catch {
-                    // Token refresh failed, logout
-                    get().logout();
+                    // The refresh cookie is missing, expired or revoked.
+                    setAccessToken(null);
+                    set(signedOut);
                     return false;
                 }
             },
@@ -119,36 +110,52 @@ export const useAuthStore = create<AuthStore>()(
                 set({ isLoading: loading });
             },
 
-            // Check auth on app load
-            checkAuth: () => {
-                const { accessToken } = get();
-                if (accessToken) {
-                    api.defaults.headers.common['Authorization'] = `Bearer ${accessToken}`;
-                    set({ isAuthenticated: true, isLoading: false });
+            // Restore the session on app load.
+            //
+            // The access token is never written to storage, so a reload starts
+            // without one. If this browser was signed in (a user is persisted),
+            // the HttpOnly refresh cookie is exchanged for a fresh access token.
+            checkAuth: async () => {
+                if (!get().user) {
+                    set({ isLoading: false, isAuthenticated: false });
+                    return;
+                }
 
-                    // Verify token and get fresh user data
-                    api.get<User>('/auth/me')
-                        .then((response) => {
-                            set({ user: response.data });
-                        })
-                        .catch(() => {
-                            // Token invalid, try refresh
-                            get().refreshToken();
-                        });
-                } else {
-                    set({ isLoading: false });
+                set({ isLoading: true });
+                const restored = await get().refreshToken();
+                if (!restored) return;
+
+                set({ isLoading: false });
+                try {
+                    const response = await api.get<User>('/auth/me');
+                    set({ user: response.data });
+                } catch {
+                    // Keep the persisted user; a failing profile call is not a logout.
                 }
             },
         }),
         {
             name: 'voip-auth',
+            version: 2,
             storage: createJSONStorage(() => localStorage),
+            // Only the profile is persisted. The access token lives in memory:
+            // anything in localStorage can be read by injected script.
             partialize: (state) => ({
-                accessToken: state.accessToken,
                 user: state.user,
+            }),
+            // Version 1 stored the access token; drop it on upgrade.
+            migrate: (persisted) => ({
+                user: (persisted as { user?: User | null } | null)?.user ?? null,
             }),
         }
     )
 );
+
+// When a request finds the session can no longer be refreshed, sign out so
+// the router shows the login page (no full-page reload).
+setAuthFailureHandler(() => {
+    setAccessToken(null);
+    useAuthStore.setState(signedOut);
+});
 
 export default useAuthStore;

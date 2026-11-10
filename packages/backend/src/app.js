@@ -32,11 +32,14 @@ app.use(cors({
 // Cookie parser for refresh tokens
 app.use(cookieParser());
 
-// Trust proxy for accurate IP addresses behind load balancer
-app.set('trust proxy', 1);
+// Number of proxies in front of the app (TRUST_PROXY). Rate limits are keyed
+// on req.ip, so this must match the real deployment: too high and clients
+// can spoof X-Forwarded-For, too low and every user shares the proxy's IP.
+app.set('trust proxy', config.trustProxy);
 
-// Body parsing - raw for webhooks (Stripe needs raw body)
-app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }));
+// Body parsing. Webhooks keep the raw bytes: both Stripe and Telnyx sign the
+// exact body they sent, and a re-serialised JSON object would not verify.
+app.use('/api/webhooks', express.raw({ type: () => true, limit: '1mb' }));
 app.use(express.json({ limit: '10kb' })); // Limit body size
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
@@ -46,7 +49,10 @@ app.use((req, res, next) => {
 
     res.on('finish', () => {
         const duration = Date.now() - start;
-        logger.info(`${req.method} ${req.path} ${res.statusCode} ${duration}ms`, {
+        // originalUrl, not req.path: by the time the response finishes,
+        // req.path is relative to whichever router handled the request.
+        const path = req.originalUrl.split('?')[0];
+        logger.info(`${req.method} ${path} ${res.statusCode} ${duration}ms`, {
             ip: req.ip,
             userAgent: req.get('User-Agent')?.substring(0, 100),
             userId: req.user?.userId
@@ -65,7 +71,12 @@ app.get('/health', (req, res) => {
     });
 });
 
-// Apply standard rate limiting to all API routes
+// Webhooks are mounted before the general API limiter and have their own:
+// Stripe and Telnyx deliver from a handful of addresses, and a 429 here is a
+// lost payment or an unbilled call.
+app.use('/api/webhooks', rateLimiters.webhook, webhooksRoutes);
+
+// Apply standard rate limiting to all other API routes
 app.use('/api/', rateLimiters.api);
 
 // API Routes
@@ -74,7 +85,6 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/numbers', numbersRoutes);
 app.use('/api/calls', callsRoutes);
 app.use('/api/rates', ratesRoutes);
-app.use('/api/webhooks', rateLimiters.webhook, webhooksRoutes);
 
 // 404 handler
 app.use((req, res) => {

@@ -3,44 +3,68 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import db from '../config/database.js';
 import config from '../config/index.js';
+import { httpError, isUniqueViolation } from '../utils/errors.js';
+
+// A refresh token that was rotated this recently and is presented again is
+// treated as a benign race (two tabs refreshing at once), not as theft.
+const ROTATION_GRACE_SECONDS = 10;
+
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
+
+// Lazily computed hash used to spend the same bcrypt time on unknown emails
+// as on known ones, so response time does not reveal which emails exist.
+let dummyHashPromise = null;
+const getDummyHash = () => {
+    dummyHashPromise ??= bcrypt.hash(crypto.randomBytes(16).toString('hex'), config.bcryptRounds);
+    return dummyHashPromise;
+};
 
 class AuthService {
     /**
      * Register a new user
      */
     async register({ email, password, firstName, lastName }) {
+        const normalizedEmail = email.toLowerCase();
+
         // Check if user exists
-        const existingUser = await db('users').where({ email: email.toLowerCase() }).first();
+        const existingUser = await db('users').where({ email: normalizedEmail }).first();
         if (existingUser) {
-            const error = new Error('Email already registered');
-            error.status = 400;
-            throw error;
+            throw httpError(400, 'Email already registered');
         }
 
         // Hash password
-        const passwordHash = await bcrypt.hash(password, 12);
+        const passwordHash = await bcrypt.hash(password, config.bcryptRounds);
 
         // Create user with transaction
-        const [user] = await db.transaction(async (trx) => {
-            // Insert user
-            const [newUser] = await trx('users')
-                .insert({
-                    email: email.toLowerCase(),
-                    password_hash: passwordHash,
-                    first_name: firstName,
-                    last_name: lastName
-                })
-                .returning(['id', 'email', 'first_name', 'last_name', 'created_at']);
+        let user;
+        try {
+            user = await db.transaction(async (trx) => {
+                // Insert user
+                const [newUser] = await trx('users')
+                    .insert({
+                        email: normalizedEmail,
+                        password_hash: passwordHash,
+                        first_name: firstName,
+                        last_name: lastName
+                    })
+                    .returning(['id', 'email', 'first_name', 'last_name', 'created_at']);
 
-            // Create wallet for user
-            await trx('wallets').insert({
-                user_id: newUser.id,
-                balance: 0,
-                currency: 'USD'
+                // Create wallet for user
+                await trx('wallets').insert({
+                    user_id: newUser.id,
+                    balance: 0,
+                    currency: 'USD'
+                });
+
+                return newUser;
             });
-
-            return [newUser];
-        });
+        } catch (error) {
+            // Two registrations for the same email at once: the unique index decides.
+            if (isUniqueViolation(error)) {
+                throw httpError(400, 'Email already registered');
+            }
+            throw error;
+        }
 
         // Generate tokens
         const accessToken = this.generateAccessToken(user);
@@ -67,18 +91,11 @@ class AuthService {
     async login({ email, password, deviceInfo, ipAddress }) {
         // Find user
         const user = await db('users').where({ email: email.toLowerCase() }).first();
-        if (!user) {
-            const error = new Error('Invalid email or password');
-            error.status = 401;
-            throw error;
-        }
 
-        // Verify password
-        const isValidPassword = await bcrypt.compare(password, user.password_hash);
-        if (!isValidPassword) {
-            const error = new Error('Invalid email or password');
-            error.status = 401;
-            throw error;
+        // Always run one bcrypt comparison, whether or not the email exists.
+        const isValidPassword = await bcrypt.compare(password, user ? user.password_hash : await getDummyHash());
+        if (!user || !isValidPassword) {
+            throw httpError(401, 'Invalid email or password');
         }
 
         // Generate tokens
@@ -102,54 +119,71 @@ class AuthService {
     }
 
     /**
-     * Refresh access token using refresh token
+     * Exchange a refresh token for a new access token and a new refresh token.
+     *
+     * Rotation is a single atomic claim: `UPDATE ... WHERE revoked = false`
+     * succeeds for exactly one caller, so one token can never be redeemed
+     * twice. The replacement stays in the same family.
+     *
+     * A token that has already been rotated or revoked and shows up again
+     * means it leaked: the whole family is revoked. The one exception is a
+     * token rotated a few seconds ago (two tabs refreshing together), which
+     * gets a 409 and no other consequence.
      */
     async refreshTokens(refreshToken, deviceInfo, ipAddress) {
-        // Hash the provided refresh token
-        const refreshTokenHash = crypto
-            .createHash('sha256')
-            .update(refreshToken)
-            .digest('hex');
+        const refreshTokenHash = hashToken(refreshToken);
 
-        // Find the refresh token in database
-        const storedToken = await db('refresh_tokens')
-            .where({ token_hash: refreshTokenHash, revoked: false })
-            .where('expires_at', '>', new Date())
-            .first();
+        const rotated = await db.transaction(async (trx) => {
+            const [claimed] = await trx('refresh_tokens')
+                .where({ token_hash: refreshTokenHash, revoked: false })
+                .where('expires_at', '>', trx.fn.now())
+                .update({ revoked: true, revoked_at: trx.fn.now(), revoked_reason: 'rotated' })
+                .returning(['id', 'user_id', 'family_id']);
 
-        if (!storedToken) {
-            const error = new Error('Invalid or expired refresh token');
-            error.status = 401;
-            throw error;
+            if (!claimed) return null;
+
+            const user = await trx('users').where({ id: claimed.user_id }).first();
+            if (!user) return null;
+
+            const next = await this.generateRefreshToken();
+            await this.storeRefreshToken(user.id, next.refreshTokenHash, deviceInfo, ipAddress, {
+                familyId: claimed.family_id,
+                trx
+            });
+
+            return { user, refreshToken: next.refreshToken };
+        });
+
+        if (rotated) {
+            return {
+                accessToken: this.generateAccessToken(rotated.user),
+                refreshToken: rotated.refreshToken
+            };
         }
 
-        // Get user
-        const user = await db('users')
-            .where({ id: storedToken.user_id })
+        // Nothing was claimed. Work out why, using the database clock.
+        const existing = await db('refresh_tokens')
+            .where({ token_hash: refreshTokenHash })
+            .select(
+                'family_id',
+                'revoked',
+                db.raw(`(revoked_reason = 'rotated' AND revoked_at > now() - interval '${ROTATION_GRACE_SECONDS} seconds') AS just_rotated`)
+            )
             .first();
 
-        if (!user) {
-            const error = new Error('User not found');
-            error.status = 401;
-            throw error;
+        if (existing?.revoked) {
+            if (existing.just_rotated) {
+                throw httpError(409, 'Refresh already in progress', { code: 'REFRESH_CONFLICT' });
+            }
+
+            await db('refresh_tokens')
+                .where({ family_id: existing.family_id, revoked: false })
+                .update({ revoked: true, revoked_at: db.fn.now(), revoked_reason: 'reuse' });
+
+            throw httpError(401, 'Invalid or expired refresh token', { code: 'TOKEN_REUSED' });
         }
 
-        // Revoke old refresh token (token rotation)
-        await db('refresh_tokens')
-            .where({ id: storedToken.id })
-            .update({ revoked: true });
-
-        // Generate new tokens
-        const accessToken = this.generateAccessToken(user);
-        const newRefreshToken = await this.generateRefreshToken();
-
-        // Store new refresh token
-        await this.storeRefreshToken(user.id, newRefreshToken.refreshTokenHash, deviceInfo, ipAddress);
-
-        return {
-            accessToken,
-            refreshToken: newRefreshToken.refreshToken
-        };
+        throw httpError(401, 'Invalid or expired refresh token');
     }
 
     /**
@@ -158,14 +192,9 @@ class AuthService {
     async logout(refreshToken) {
         if (!refreshToken) return { message: 'Logged out' };
 
-        const refreshTokenHash = crypto
-            .createHash('sha256')
-            .update(refreshToken)
-            .digest('hex');
-
         await db('refresh_tokens')
-            .where({ token_hash: refreshTokenHash })
-            .update({ revoked: true });
+            .where({ token_hash: hashToken(refreshToken), revoked: false })
+            .update({ revoked: true, revoked_at: db.fn.now(), revoked_reason: 'logout' });
 
         return { message: 'Logged out successfully' };
     }
@@ -175,8 +204,8 @@ class AuthService {
      */
     async logoutAll(userId) {
         await db('refresh_tokens')
-            .where({ user_id: userId })
-            .update({ revoked: true });
+            .where({ user_id: userId, revoked: false })
+            .update({ revoked: true, revoked_at: db.fn.now(), revoked_reason: 'logout' });
 
         return { message: 'Logged out from all devices' };
     }
@@ -192,9 +221,7 @@ class AuthService {
             .first();
 
         if (!user) {
-            const error = new Error('User not found');
-            error.status = 404;
-            throw error;
+            throw httpError(404, 'User not found');
         }
 
         // Get wallet balance
@@ -249,6 +276,10 @@ class AuthService {
             .update(updateData)
             .returning(['id', 'email', 'first_name', 'last_name', 'phone_number', 'avatar_url', 'timezone']);
 
+        if (!user) {
+            throw httpError(404, 'User not found');
+        }
+
         return {
             id: user.id,
             email: user.email,
@@ -265,15 +296,16 @@ class AuthService {
      */
     async changePassword(userId, { currentPassword, newPassword }) {
         const user = await db('users').where({ id: userId }).first();
+        if (!user) {
+            throw httpError(404, 'User not found');
+        }
 
         const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
         if (!isValidPassword) {
-            const error = new Error('Current password is incorrect');
-            error.status = 400;
-            throw error;
+            throw httpError(400, 'Current password is incorrect');
         }
 
-        const newPasswordHash = await bcrypt.hash(newPassword, 12);
+        const newPasswordHash = await bcrypt.hash(newPassword, config.bcryptRounds);
 
         await db('users')
             .where({ id: userId })
@@ -283,9 +315,7 @@ class AuthService {
             });
 
         // Revoke all refresh tokens for security
-        await db('refresh_tokens')
-            .where({ user_id: userId })
-            .update({ revoked: true });
+        await this.logoutAll(userId);
 
         return { message: 'Password updated successfully' };
     }
@@ -313,14 +343,14 @@ class AuthService {
      */
     async revokeSession(userId, sessionId) {
         await db('refresh_tokens')
-            .where({ id: sessionId, user_id: userId })
-            .update({ revoked: true });
+            .where({ id: sessionId, user_id: userId, revoked: false })
+            .update({ revoked: true, revoked_at: db.fn.now(), revoked_reason: 'logout' });
 
         return { message: 'Session revoked' };
     }
 
     /**
-     * Generate short-lived access token (15 minutes)
+     * Generate short-lived access token (JWT_EXPIRES_IN, 15 minutes by default)
      */
     generateAccessToken(user) {
         return jwt.sign(
@@ -330,46 +360,49 @@ class AuthService {
                 type: 'access'
             },
             config.jwtSecret,
-            { expiresIn: '15m' }
+            {
+                algorithm: 'HS256',
+                expiresIn: config.jwtExpiresIn,
+                issuer: config.jwtIssuer,
+                audience: config.jwtAudience
+            }
         );
     }
 
     /**
-     * Generate long-lived refresh token (7 days)
+     * Generate long-lived refresh token (REFRESH_TOKEN_EXPIRES_IN, 7 days by default)
      */
     async generateRefreshToken() {
         const refreshToken = crypto.randomBytes(64).toString('hex');
-        const refreshTokenHash = crypto
-            .createHash('sha256')
-            .update(refreshToken)
-            .digest('hex');
-
-        return { refreshToken, refreshTokenHash };
+        return { refreshToken, refreshTokenHash: hashToken(refreshToken) };
     }
 
     /**
-     * Store refresh token in database
+     * Store refresh token in database.
+     * Without a familyId the database starts a new family (a new login).
      */
-    async storeRefreshToken(userId, tokenHash, deviceInfo = null, ipAddress = null) {
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7); // 7 days
-
-        await db('refresh_tokens').insert({
+    async storeRefreshToken(userId, tokenHash, deviceInfo = null, ipAddress = null, { familyId, trx } = {}) {
+        const row = {
             user_id: userId,
             token_hash: tokenHash,
-            device_info: deviceInfo,
-            ip_address: ipAddress,
-            expires_at: expiresAt
-        });
+            // Both columns are bounded; a long User-Agent must not fail the login.
+            device_info: typeof deviceInfo === 'string' ? deviceInfo.slice(0, 255) : null,
+            ip_address: typeof ipAddress === 'string' ? ipAddress.slice(0, 45) : null,
+            expires_at: new Date(Date.now() + config.refreshTokenTtlMs)
+        };
+        if (familyId) row.family_id = familyId;
+
+        await (trx || db)('refresh_tokens').insert(row);
     }
 
     /**
-     * Clean up expired refresh tokens (run periodically)
+     * Delete refresh tokens that have expired (run periodically).
+     * Revoked-but-unexpired rows are kept: they are how a replayed token is
+     * recognised.
      */
     async cleanupExpiredTokens() {
         const deleted = await db('refresh_tokens')
             .where('expires_at', '<', new Date())
-            .orWhere('revoked', true)
             .del();
 
         return { deleted };

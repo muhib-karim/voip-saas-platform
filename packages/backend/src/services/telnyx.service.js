@@ -2,10 +2,58 @@ import Telnyx from 'telnyx';
 import db from '../config/database.js';
 import config from '../config/index.js';
 import walletService from './wallet.service.js';
+import cdrService, { CALL_RATE_PER_MINUTE } from './cdr.service.js';
+import { httpError, HttpError, isUniqueViolation } from '../utils/errors.js';
+import { logger } from '../middleware/errorHandler.js';
 
-const telnyx = Telnyx(config.telnyxApiKey);
+// Telnyx limits for time_limit_secs on a call leg.
+const MIN_CALL_SECONDS = 60;
+const MAX_CALL_SECONDS = 14400;
+
+const WEBHOOK_TOLERANCE_SECONDS = 300;
+
+const LIVE_NUMBER_INDEX = 'did_numbers_phone_number_live_unique';
 
 class TelnyxService {
+    constructor() {
+        // Exposed so tests can stub individual API calls.
+        this.client = Telnyx(config.telnyxApiKey);
+    }
+
+    /**
+     * Verify a Telnyx webhook (Ed25519 over "<timestamp>|<raw body>") and
+     * return the parsed event. Throws when the signature is missing or wrong,
+     * when the timestamp is more than five minutes from now (replay), or when
+     * no public key is configured: an unverifiable webhook is never trusted.
+     */
+    verifyWebhook(rawBody, signatureHeader, timestampHeader) {
+        if (!config.telnyxPublicKey) {
+            throw httpError(503, 'Telnyx webhook verification is not configured');
+        }
+        if (typeof rawBody !== 'string' || rawBody === '' || typeof signatureHeader !== 'string' || !signatureHeader) {
+            throw httpError(400, 'Invalid webhook signature');
+        }
+        if (typeof timestampHeader !== 'string' || !/^\d{1,12}$/.test(timestampHeader)) {
+            throw httpError(400, 'Invalid webhook signature');
+        }
+        const age = Math.abs(Math.floor(Date.now() / 1000) - Number(timestampHeader));
+        if (age > WEBHOOK_TOLERANCE_SECONDS) {
+            throw httpError(400, 'Webhook timestamp is outside the allowed window');
+        }
+
+        try {
+            return this.client.webhooks.constructEvent(
+                rawBody,
+                signatureHeader,
+                timestampHeader,
+                config.telnyxPublicKey,
+                WEBHOOK_TOLERANCE_SECONDS
+            );
+        } catch {
+            throw httpError(400, 'Invalid webhook signature');
+        }
+    }
+
     /**
      * Search available DID numbers
      */
@@ -27,7 +75,7 @@ class TelnyxService {
                 searchParams.filter.phone_number = { contains };
             }
 
-            const response = await telnyx.availablePhoneNumbers.list(searchParams);
+            const response = await this.client.availablePhoneNumbers.list(searchParams);
 
             return response.data.map(num => ({
                 phoneNumber: num.phone_number,
@@ -38,83 +86,106 @@ class TelnyxService {
                 features: num.features || []
             }));
         } catch (error) {
-            console.error('Telnyx search error:', error);
-            throw new Error('Failed to search phone numbers');
+            logger.error('Telnyx search error', { message: error.message });
+            throw httpError(502, 'Failed to search phone numbers');
         }
     }
 
     /**
-     * Purchase a DID number
+     * Purchase a DID number.
+     *
+     * Reserve first, then buy:
+     *   1. one transaction inserts the number as "pending" and debits setup +
+     *      first month. A number someone else holds, or a wallet that cannot
+     *      cover it, rolls the whole thing back before Telnyx is contacted.
+     *   2. order from Telnyx.
+     *   3. mark the number active, or on failure release it and refund.
      */
     async purchaseNumber(userId, phoneNumber) {
-        // Check if number is already owned
-        const existing = await db('did_numbers')
-            .where({ phone_number: phoneNumber, status: 'active' })
-            .first();
+        const monthlyCost = 1.00; // Telnyx typical cost
+        const setupCost = 0.00;
+        const total = setupCost + monthlyCost;
 
-        if (existing) {
-            const error = new Error('This number is already in use');
-            error.status = 400;
+        let reserved;
+        try {
+            reserved = await db.transaction(async (trx) => {
+                const [did] = await trx('did_numbers')
+                    .insert({
+                        user_id: userId,
+                        phone_number: phoneNumber,
+                        telnyx_number_id: 'pending',
+                        country_code: phoneNumber.startsWith('+1') ? 'US' : 'XX',
+                        type: 'local',
+                        monthly_cost: monthlyCost,
+                        setup_cost: setupCost,
+                        status: 'pending'
+                    })
+                    .returning('*');
+
+                await walletService.deductFunds(userId, total, {
+                    description: `DID purchase: ${phoneNumber}`,
+                    referenceType: 'did_purchase',
+                    referenceId: did.id
+                }, trx);
+
+                return did;
+            });
+        } catch (error) {
+            if (isUniqueViolation(error, LIVE_NUMBER_INDEX)) {
+                throw httpError(409, 'This number is already in use');
+            }
+            if (error instanceof HttpError && error.code === 'INSUFFICIENT_FUNDS') {
+                throw httpError(400, 'Insufficient wallet balance', { code: 'INSUFFICIENT_FUNDS' });
+            }
             throw error;
         }
 
+        let order;
         try {
-            // Order the number from Telnyx
-            const orderResponse = await telnyx.numberOrders.create({
+            const orderResponse = await this.client.numberOrders.create({
                 phone_numbers: [{ phone_number: phoneNumber }],
                 connection_id: config.telnyxSipConnectionId
             });
-
-            const order = orderResponse.data;
-            const purchasedNumber = order.phone_numbers[0];
-
-            // Get monthly cost (default to $1 if not available)
-            const monthlyCost = 1.00; // Telnyx typical cost
-            const setupCost = 0.00;
-
-            // Check wallet balance
-            const hasFunds = await walletService.hasSufficientBalance(userId, setupCost + monthlyCost);
-            if (!hasFunds && setupCost + monthlyCost > 0) {
-                const error = new Error('Insufficient wallet balance');
-                error.status = 400;
-                throw error;
-            }
-
-            // Save to database
-            const [didNumber] = await db('did_numbers')
-                .insert({
-                    user_id: userId,
-                    phone_number: purchasedNumber.phone_number,
-                    telnyx_number_id: purchasedNumber.id || order.id,
-                    country_code: purchasedNumber.phone_number?.substring(0, 2) === '+1' ? 'US' : 'XX',
-                    type: 'local',
-                    monthly_cost: monthlyCost,
-                    setup_cost: setupCost,
-                    status: 'active'
-                })
-                .returning('*');
-
-            // Deduct from wallet if there's a cost
-            if (setupCost > 0) {
-                await walletService.deductFunds(userId, setupCost, {
-                    description: `DID purchase: ${phoneNumber}`,
-                    referenceType: 'did_purchase',
-                    referenceId: didNumber.id
-                });
-            }
-
-            return {
-                id: didNumber.id,
-                phoneNumber: didNumber.phone_number,
-                monthlyCost: parseFloat(didNumber.monthly_cost),
-                status: didNumber.status,
-                purchasedAt: didNumber.purchased_at
-            };
+            order = orderResponse.data;
         } catch (error) {
-            console.error('Telnyx purchase error:', error);
-            if (error.status) throw error;
-            throw new Error('Failed to purchase phone number');
+            logger.error('Telnyx purchase error', { message: error.message });
+            await this.#cancelReservation(userId, reserved, total);
+            throw httpError(502, 'Failed to purchase phone number');
         }
+
+        const purchasedNumber = order?.phone_numbers?.[0] || {};
+        const [didNumber] = await db('did_numbers')
+            .where({ id: reserved.id })
+            .update({
+                status: 'active',
+                telnyx_number_id: purchasedNumber.id || order?.id || 'unknown',
+                purchased_at: db.fn.now()
+            })
+            .returning('*');
+
+        return {
+            id: didNumber.id,
+            phoneNumber: didNumber.phone_number,
+            monthlyCost: parseFloat(didNumber.monthly_cost),
+            status: didNumber.status,
+            purchasedAt: didNumber.purchased_at
+        };
+    }
+
+    /** Undo a reservation whose Telnyx order failed: free the number and refund. */
+    async #cancelReservation(userId, reserved, amount) {
+        await db.transaction(async (trx) => {
+            await trx('did_numbers')
+                .where({ id: reserved.id })
+                .update({ status: 'released', user_id: null });
+
+            await walletService.addFunds(userId, amount, {
+                type: 'refund',
+                description: `Refund: DID purchase failed (${reserved.phone_number})`,
+                referenceType: 'did_purchase',
+                referenceId: reserved.id
+            }, trx);
+        });
     }
 
     /**
@@ -142,26 +213,24 @@ class TelnyxService {
      */
     async releaseNumber(userId, numberId) {
         const number = await db('did_numbers')
-            .where({ id: numberId, user_id: userId })
+            .where({ id: numberId, user_id: userId, status: 'active' })
             .first();
 
         if (!number) {
-            const error = new Error('Number not found');
-            error.status = 404;
-            throw error;
+            throw httpError(404, 'Number not found');
         }
 
         try {
             // Release from Telnyx
-            await telnyx.phoneNumbers.del(number.telnyx_number_id);
+            await this.client.phoneNumbers.del(number.telnyx_number_id);
         } catch (error) {
-            console.error('Telnyx release error:', error);
+            logger.error('Telnyx release error', { message: error.message, numberId });
             // Continue with database update even if Telnyx fails
         }
 
         // Update database
         await db('did_numbers')
-            .where({ id: numberId })
+            .where({ id: numberId, user_id: userId })
             .update({
                 status: 'released',
                 user_id: null
@@ -182,7 +251,7 @@ class TelnyxService {
 
             if (!credentials) {
                 // Create new Telnyx credential
-                const credResponse = await telnyx.telephonyCredentials.create({
+                const credResponse = await this.client.telephonyCredentials.create({
                     connection_id: config.telnyxSipConnectionId,
                     name: `user-${userId}`,
                     tag: userId
@@ -200,7 +269,7 @@ class TelnyxService {
             }
 
             // Generate JWT token
-            const tokenResponse = await telnyx.telephonyCredentials.createToken(
+            const tokenResponse = await this.client.telephonyCredentials.createToken(
                 credentials.telnyx_credential_id
             );
 
@@ -209,13 +278,18 @@ class TelnyxService {
                 sipUsername: credentials.sip_username
             };
         } catch (error) {
-            console.error('WebRTC token error:', error);
-            throw new Error('Failed to generate WebRTC credentials');
+            logger.error('WebRTC token error', { message: error.message });
+            throw httpError(502, 'Failed to generate WebRTC credentials');
         }
     }
 
     /**
-     * Initiate outbound call
+     * Initiate outbound call.
+     *
+     * A call's cost is only known when it ends, so exposure is limited up
+     * front: the wallet must cover a minute, Telnyx is told to end the call
+     * when the balance would run out, and a user may only have a few calls
+     * open at once.
      */
     async initiateCall(userId, { from, to }) {
         // Verify user owns the 'from' number
@@ -224,30 +298,44 @@ class TelnyxService {
             .first();
 
         if (!userNumber) {
-            const error = new Error('You do not own this phone number');
-            error.status = 403;
-            throw error;
+            throw httpError(403, 'You do not own this phone number');
         }
 
+        const balance = await walletService.getBalance(userId);
+        if (balance < CALL_RATE_PER_MINUTE) {
+            throw httpError(400, 'Insufficient wallet balance to place a call', { code: 'INSUFFICIENT_FUNDS' });
+        }
+
+        const openCalls = await cdrService.countOpenOutboundCalls(userId);
+        if (openCalls >= config.maxConcurrentCalls) {
+            throw httpError(429, 'Too many calls in progress');
+        }
+
+        const affordableSeconds = Math.floor(balance / CALL_RATE_PER_MINUTE + 1e-9) * 60;
+        const timeLimitSecs = Math.min(Math.max(affordableSeconds, MIN_CALL_SECONDS), MAX_CALL_SECONDS);
+
+        let response;
         try {
-            const response = await telnyx.calls.create({
+            response = await this.client.calls.create({
                 connection_id: config.telnyxSipConnectionId,
                 from: from,
                 to: to,
-                webhook_url: `${config.backendUrl}/api/webhooks/telnyx/call`
+                webhook_url: `${config.backendUrl}/api/webhooks/telnyx/call`,
+                time_limit_secs: timeLimitSecs
             });
-
-            return {
-                callId: response.data.call_control_id,
-                callLegId: response.data.call_leg_id,
-                from,
-                to,
-                status: 'initiated'
-            };
         } catch (error) {
-            console.error('Call initiation error:', error);
-            throw new Error('Failed to initiate call');
+            logger.error('Call initiation error', { message: error.message });
+            throw httpError(502, 'Failed to initiate call');
         }
+
+        return {
+            callId: response.data.call_control_id,
+            callLegId: response.data.call_leg_id,
+            didNumberId: userNumber.id,
+            from,
+            to,
+            status: 'initiated'
+        };
     }
 }
 

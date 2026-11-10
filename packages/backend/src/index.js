@@ -3,9 +3,10 @@ import { initRedis } from './config/redis.js';
 import { logger } from './middleware/errorHandler.js';
 import app from './app.js';
 
-// Initialize Redis (non-blocking)
+// Initialize Redis (non-blocking). Without it the rate limiters fall back to
+// per-process counters and the rates cache is skipped; nothing fails open.
 initRedis().catch(err => {
-    logger.warn('Redis initialization failed, continuing without cache:', err.message);
+    logger.warn('Redis unavailable: rate limits are per-process and the rates cache is off', { message: err.message });
 });
 
 // Graceful shutdown handling
@@ -20,7 +21,13 @@ const gracefulShutdown = async (signal) => {
         try {
             const { getRedis } = await import('./config/redis.js');
             const redis = getRedis();
-            if (redis) await redis.quit();
+            // quit() waits for the server; if Redis is down it never returns
+            // and shutdown would hang until the forced exit below.
+            if (redis?.isReady) {
+                await redis.quit();
+            } else if (redis?.isOpen) {
+                await redis.disconnect();
+            }
 
             const db = (await import('./config/database.js')).default;
             await db.destroy();
@@ -37,7 +44,7 @@ const gracefulShutdown = async (signal) => {
     setTimeout(() => {
         logger.error('Forced shutdown after timeout');
         process.exit(1);
-    }, 30000);
+    }, 30000).unref();
 };
 
 // Start server

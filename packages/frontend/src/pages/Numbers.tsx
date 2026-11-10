@@ -54,6 +54,8 @@ const Numbers: React.FC = () => {
     // Load user's numbers on mount
     useEffect(() => {
         loadUserNumbers();
+        // Runs once on mount by design; the loader is not a stable reference.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadUserNumbers = async () => {

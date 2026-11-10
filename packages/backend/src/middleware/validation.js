@@ -6,20 +6,33 @@
 /**
  * Validation rules
  */
+const isString = (value) => typeof value === 'string';
+
+// Every format rule checks the type first. JSON bodies can carry arrays and
+// objects where a string is expected, and RegExp.test() would coerce them.
 const rules = {
     required: (value) => value !== undefined && value !== null && value !== '',
-    email: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
-    minLength: (min) => (value) => typeof value === 'string' && value.length >= min,
-    maxLength: (max) => (value) => typeof value === 'string' && value.length <= max,
-    phone: (value) => /^\+?[1-9]\d{1,14}$/.test(value), // E.164 format
-    uuid: (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value),
-    numeric: (value) => !isNaN(parseFloat(value)) && isFinite(value),
-    alphanumeric: (value) => /^[a-zA-Z0-9]+$/.test(value),
+    string: (value) => isString(value),
+    email: (value) => isString(value) && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    minLength: (min) => (value) => isString(value) && value.length >= min,
+    maxLength: (max) => (value) => isString(value) && value.length <= max,
+    phone: (value) => isString(value) && /^\+?[1-9]\d{1,14}$/.test(value), // E.164 format
+    uuid: (value) => isString(value) && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value),
+    numeric: (value) => (typeof value === 'number' || isString(value)) && !isNaN(parseFloat(value)) && isFinite(value),
+    alphanumeric: (value) => isString(value) && /^[a-zA-Z0-9]+$/.test(value),
     in: (values) => (value) => values.includes(value),
     min: (minVal) => (value) => parseFloat(value) >= minVal,
     max: (maxVal) => (value) => parseFloat(value) <= maxVal,
     isArray: (value) => Array.isArray(value),
     isObject: (value) => typeof value === 'object' && value !== null && !Array.isArray(value),
+    httpsUrl: (value) => {
+        if (!isString(value) || value.length > 2048) return false;
+        try {
+            return new URL(value).protocol === 'https:';
+        } catch {
+            return false;
+        }
+    },
 };
 
 /**
@@ -39,7 +52,7 @@ export const schemas = {
     login: {
         body: {
             email: [rules.required, rules.email],
-            password: [rules.required]
+            password: [rules.required, rules.string, rules.maxLength(100)]
         }
     },
 
@@ -51,7 +64,7 @@ export const schemas = {
 
     changePassword: {
         body: {
-            currentPassword: [rules.required],
+            currentPassword: [rules.required, rules.string, rules.maxLength(100)],
             newPassword: [rules.required, rules.minLength(8), rules.maxLength(100)]
         }
     },
@@ -61,7 +74,8 @@ export const schemas = {
             firstName: [rules.minLength(1), rules.maxLength(100)],
             lastName: [rules.minLength(1), rules.maxLength(100)],
             phoneNumber: [rules.phone],
-            timezone: [rules.maxLength(50)]
+            timezone: [rules.maxLength(50)],
+            avatarUrl: [rules.httpsUrl]
         }
     },
 

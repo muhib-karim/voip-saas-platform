@@ -75,3 +75,35 @@ test('trimStrings trims string values and leaves others alone', () => {
     assert.equal(result.nextCalled, true);
     assert.deepEqual(result.req.body, { email: 'a@b.co', amount: 10 });
 });
+
+// JSON bodies can carry arrays and objects where a string is expected. The
+// format rules used RegExp.test(), which coerces: ['a@b.co'] passed as an email
+// and the handler then crashed calling .toLowerCase() on an array.
+test('format rules reject values that are not strings', () => {
+    const register = (overrides) => run(validate(schemas.register), {
+        body: { email: 'user@example.com', password: 'correct-horse', firstName: 'Ada', lastName: 'Lovelace', ...overrides }
+    });
+    assert.equal(register({ email: ['user@example.com'] }).statusCode, 400);
+    assert.equal(register({ email: { toString: () => 'user@example.com' } }).statusCode, 400);
+    assert.equal(register({ password: 1234567890 }).statusCode, 400);
+    assert.equal(register({ firstName: ['Ada'] }).statusCode, 400);
+
+    assert.equal(run(validate(schemas.login), { body: { email: 'user@example.com', password: 12345678 } }).statusCode, 400);
+    assert.equal(run(validate(schemas.login), { body: { email: 'user@example.com', password: { $ne: '' } } }).statusCode, 400);
+    assert.equal(run(validate(schemas.purchaseNumber), { body: { phoneNumber: ['+14155550123'] } }).statusCode, 400);
+    assert.equal(run(validate(schemas.uuidParam), { params: { id: ['3f2b8c1e-5d4a-4e6f-8a9b-0c1d2e3f4a5b'] } }).statusCode, 400);
+});
+
+test('an over-long email is rejected', () => {
+    const email = `${'a'.repeat(250)}@example.com`;
+    assert.equal(run(validate(schemas.login), { body: { email, password: 'x' } }).statusCode, 400);
+});
+
+test('avatarUrl must be an https URL', () => {
+    const update = (avatarUrl) => run(validate(schemas.updateProfile), { body: { avatarUrl } });
+    assert.equal(update('https://example.com/a.png').nextCalled, true);
+    assert.equal(update('http://example.com/a.png').statusCode, 400);
+    assert.equal(update('javascript:alert(1)').statusCode, 400);
+    assert.equal(update('data:text/html;base64,AAAA').statusCode, 400);
+    assert.equal(update(`https://example.com/${'a'.repeat(3000)}`).statusCode, 400);
+});

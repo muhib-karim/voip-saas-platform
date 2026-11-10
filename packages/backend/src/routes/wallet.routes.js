@@ -1,14 +1,23 @@
 import { Router } from 'express';
 import walletService from '../services/wallet.service.js';
-import billingService from '../services/billing.service.js';
+import billingService, { MIN_TOPUP, MAX_TOPUP } from '../services/billing.service.js';
 import { authenticate } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
+import { parsePagination } from '../utils/validators.js';
 
 const router = Router();
 
 const topupSchema = {
     body: {
-        amount: { type: 'number', required: true, min: 5 }
+        amount: { type: 'number', required: true, min: MIN_TOPUP, max: MAX_TOPUP, maxDecimals: 2 }
+    }
+};
+
+const transactionsSchema = {
+    query: {
+        page: { type: 'string' },
+        limit: { type: 'string' },
+        type: { type: 'string', enum: ['credit', 'debit', 'refund'] }
     }
 };
 
@@ -43,13 +52,11 @@ router.post('/topup', authenticate, validate(topupSchema), async (req, res, next
  * GET /api/wallet/transactions
  * Get transaction history
  */
-router.get('/transactions', authenticate, async (req, res, next) => {
+router.get('/transactions', authenticate, validate(transactionsSchema), async (req, res, next) => {
     try {
-        const { page = 1, limit = 20, type } = req.query;
         const result = await walletService.getTransactions(req.user.userId, {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            type
+            ...parsePagination(req.query, { defaultLimit: 20, maxLimit: 100 }),
+            type: req.query.type
         });
         res.json(result);
     } catch (error) {
