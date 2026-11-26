@@ -185,6 +185,23 @@ test('refresh treats a malformed token as missing', async () => {
     }
 });
 
+test('cookie-based refresh and logout reject cross-site origins', async () => {
+    const tok = 'a'.repeat(128);
+    for (const path of ['/api/auth/refresh', '/api/auth/logout']) {
+        const byFetchSite = await request(app)
+            .post(path)
+            .set('Cookie', `refreshToken=${tok}`)
+            .set('Sec-Fetch-Site', 'cross-site');
+        assert.equal(byFetchSite.status, 403, `${path} Sec-Fetch-Site`);
+
+        const byOrigin = await request(app)
+            .post(path)
+            .set('Cookie', `refreshToken=${tok}`)
+            .set('Origin', 'https://evil.example');
+        assert.equal(byOrigin.status, 403, `${path} Origin`);
+    }
+});
+
 test('non-UUID ids are rejected before any query runs', async () => {
     const auth = { Authorization: `Bearer ${token()}` };
     const numbers = await request(app).delete('/api/numbers/not-a-uuid').set(auth);

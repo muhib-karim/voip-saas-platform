@@ -3,6 +3,8 @@
  * Could be replaced with Zod/Joi for more complex validation needs
  */
 
+import { isEmail } from '../utils/validators.js';
+
 /**
  * Validation rules
  */
@@ -13,7 +15,7 @@ const isString = (value) => typeof value === 'string';
 const rules = {
     required: (value) => value !== undefined && value !== null && value !== '',
     string: (value) => isString(value),
-    email: (value) => isString(value) && value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    email: isEmail,
     minLength: (min) => (value) => isString(value) && value.length >= min,
     maxLength: (max) => (value) => isString(value) && value.length <= max,
     phone: (value) => isString(value) && /^\+?[1-9]\d{1,14}$/.test(value), // E.164 format

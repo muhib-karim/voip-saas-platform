@@ -113,3 +113,34 @@ test('a missing body or query object is treated as empty', () => {
     const schema = { body: { phoneNumber: { type: 'string', required: true } } };
     assert.equal(run(schema, { body: undefined }).statusCode, 400);
 });
+
+test('type failure stops length and email checks from reading array/object lengths', () => {
+    const schema = {
+        body: {
+            email: { type: 'email', required: true },
+            name: { type: 'string', minLength: 2, maxLength: 4 },
+            amount: { type: 'number', min: 1, max: 10 }
+        }
+    };
+    const arr = run(schema, {
+        body: { email: ['a@b.co'], name: ['ab', 'cd', 'ef'], amount: [5] }
+    });
+    assert.equal(arr.statusCode, 400);
+    assert.deepEqual(arr.body.details.map((d) => d.message), [
+        'email must be of type email',
+        'name must be of type string',
+        'amount must be of type number'
+    ]);
+
+    const objLen = run(schema, { body: { email: { length: 10 }, name: { length: 3 }, amount: { valueOf: () => 5 } } });
+    assert.equal(objLen.statusCode, 400);
+    assert.equal(objLen.body.details.length, 3);
+});
+
+test('email validation rejects huge ReDoS-shaped strings linearly', () => {
+    const schema = { body: { email: { type: 'email', required: true } } };
+    const start = performance.now();
+    const res = run(schema, { body: { email: `${'a'.repeat(50000)}@${'b'.repeat(50000)}` } });
+    assert.equal(res.statusCode, 400);
+    assert.ok(performance.now() - start < 50);
+});

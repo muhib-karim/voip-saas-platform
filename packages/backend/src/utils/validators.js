@@ -13,6 +13,21 @@ export const isE164 = (value) => typeof value === 'string' && E164_RE.test(value
 export const isRefreshToken = (value) => typeof value === 'string' && REFRESH_TOKEN_RE.test(value);
 
 /**
+ * Linear-time email check (avoids regex backtracking). Enforces RFC 5321 max
+ * length (254), no whitespace, one "@", and a non-empty dotted domain.
+ */
+export function isEmail(value) {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 254 || /\s/.test(value)) {
+        return false;
+    }
+    const at = value.indexOf('@');
+    if (at <= 0 || at !== value.lastIndexOf('@') || at === value.length - 1) return false;
+    const domain = value.slice(at + 1);
+    const dot = domain.indexOf('.');
+    return dot > 0 && !domain.endsWith('.') && domain.split('.').every(Boolean);
+}
+
+/**
  * Parse ?page=&limit= into safe integers. Bad or missing values fall back to
  * the defaults and limit is clamped, so user input can never produce a huge
  * LIMIT, a negative OFFSET or NaN.

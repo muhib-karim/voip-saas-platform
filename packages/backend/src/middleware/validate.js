@@ -1,3 +1,5 @@
+import { isEmail } from '../utils/validators.js';
+
 export const validate = (schema) => {
     return (req, res, next) => {
         const errors = [];
@@ -60,23 +62,21 @@ function validateFields(data, rules, location) {
                     location,
                     message: `${field} must be of type ${fieldRules.type}`
                 });
+                continue;
             }
         }
 
         // Email format
-        if (fieldRules.type === 'email' && value) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(value)) {
-                errors.push({
-                    field,
-                    location,
-                    message: `${field} must be a valid email address`
-                });
-            }
+        if (fieldRules.type === 'email' && !isEmail(value)) {
+            errors.push({
+                field,
+                location,
+                message: `${field} must be a valid email address`
+            });
         }
 
         // Min length
-        if (fieldRules.minLength && value.length < fieldRules.minLength) {
+        if (fieldRules.minLength && (typeof value !== 'string' || value.length < fieldRules.minLength)) {
             errors.push({
                 field,
                 location,
@@ -85,7 +85,7 @@ function validateFields(data, rules, location) {
         }
 
         // Max length
-        if (fieldRules.maxLength && value.length > fieldRules.maxLength) {
+        if (fieldRules.maxLength && (typeof value !== 'string' || value.length > fieldRules.maxLength)) {
             errors.push({
                 field,
                 location,
@@ -94,7 +94,7 @@ function validateFields(data, rules, location) {
         }
 
         // Min value (for numbers)
-        if (fieldRules.min !== undefined && value < fieldRules.min) {
+        if (fieldRules.min !== undefined && (typeof value !== 'number' || value < fieldRules.min)) {
             errors.push({
                 field,
                 location,
@@ -103,7 +103,7 @@ function validateFields(data, rules, location) {
         }
 
         // Max value (for numbers)
-        if (fieldRules.max !== undefined && value > fieldRules.max) {
+        if (fieldRules.max !== undefined && (typeof value !== 'number' || value > fieldRules.max)) {
             errors.push({
                 field,
                 location,

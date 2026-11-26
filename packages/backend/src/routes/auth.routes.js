@@ -29,6 +29,23 @@ const readRefreshToken = (req) => {
     return isRefreshToken(candidate) ? candidate : null;
 };
 
+// Defense-in-depth CSRF check for routes that read the refreshToken cookie.
+const verifyCookieOrigin = (req, res, next) => {
+    if (!req.cookies?.[REFRESH_COOKIE]) return next();
+    const fetchSite = req.get('Sec-Fetch-Site');
+    if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
+        return res.status(403).json({ error: 'Cross-site cookie request blocked' });
+    }
+    const origin = req.get('Origin');
+    if (origin) {
+        const allowed = new Set([config.frontendUrl, config.backendUrl].map((u) => new URL(u).origin));
+        if (!allowed.has(origin)) {
+            return res.status(403).json({ error: 'Cross-site cookie request blocked' });
+        }
+    }
+    next();
+};
+
 // Apply string trimming to all routes
 router.use(trimStrings);
 
@@ -91,7 +108,7 @@ router.post('/login',
  * POST /api/auth/refresh
  * Refresh access token using refresh token
  */
-router.post('/refresh', rateLimiters.refresh, async (req, res, next) => {
+router.post('/refresh', rateLimiters.refresh, verifyCookieOrigin, async (req, res, next) => {
     try {
         const refreshToken = readRefreshToken(req);
 
@@ -124,7 +141,7 @@ router.post('/refresh', rateLimiters.refresh, async (req, res, next) => {
  * POST /api/auth/logout
  * Logout user (revoke refresh token)
  */
-router.post('/logout', async (req, res, next) => {
+router.post('/logout', verifyCookieOrigin, async (req, res, next) => {
     try {
         await authService.logout(readRefreshToken(req));
 

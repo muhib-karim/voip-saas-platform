@@ -18,9 +18,7 @@ import webhooksRoutes from './routes/webhooks.routes.js';
 const app = express();
 
 // Security middleware
-app.use(helmet({
-    contentSecurityPolicy: config.nodeEnv === 'production' ? undefined : false
-}));
+app.use(helmet());
 
 app.use(cors({
     origin: config.frontendUrl,
